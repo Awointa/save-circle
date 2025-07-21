@@ -107,14 +107,25 @@
 ### 6. 🔓 Fund Management
 
 #### ✅ `withdraw_locked(group_id)`
+✅ withdraw_locked(group_id)
 
-* Only allowed **after the group cycle ends**.
-* Calculates remaining locked balance.
-* Transfers unused funds back to the user.
+Only allowed after the group cycle ends.
+Complete Circle: Returns all remaining funds (no penalty).
+Incomplete Circle: Applies penalty to remaining balance.
+Penalty Formula: penalty = remaining_balance * penalty_percentage / 100.
+Calculates remaining locked balance.
+Transfers withdrawable funds back to the user.
 
+✅ get_penalty_locked(user, group_id)
 
+Returns the amount of funds locked as penalty for a specific user.
+Provides transparency on penalty amounts.
 
-fn lock_liquidity
+✅ has_completed_circle(user, group_id) (Internal)
+
+Checks if user completed full savings commitment.
+Criteria: weeks_contributed >= weeks_committed AND (has_received_payout OR group finished).
+
 
 
 ---
