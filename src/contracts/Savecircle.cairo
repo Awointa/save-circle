@@ -6,22 +6,22 @@ const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
 #[starknet::contract]
 pub mod SaveCircle {
-    use starknet::event::EventEmitter;
-use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
+    use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
+    use save_circle::events::Events::UserRegistered;
     use save_circle::interfaces::Isavecircle::Isavecircle;
-    use save_circle::structs::Structs::UserProfile;
+    use save_circle::structs::Structs::{UserProfile, joined_group};
+    use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess, Vec,
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
-    use save_circle::events::Events::UserRegistered;
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -54,12 +54,13 @@ use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_
         payment_token_address: ContractAddress,
         //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
+        joined_groups: Map<ContractAddress, joined_group>,
         total_users: u256,
     }
 
     #[event]
     #[derive(Drop, starknet::Event)]
-    enum Event {
+    pub enum Event {
         #[flat]
         PausableEvent: PausableComponent::Event,
         #[flat]
@@ -126,18 +127,19 @@ use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_
             assert(name != 0, ' Name cannot be empty');
 
             let new_profile = UserProfile {
-                user_address: caller, name, avatar, is_registered: true, total_lock_amount: 0,
+                user_address: caller,
+                name,
+                avatar,
+                is_registered: true,
+                total_lock_amount: 0,
+                profile_created_at: starknet::get_block_timestamp(),
             };
 
             user_entry.write(new_profile);
 
             self.total_users.write(self.total_users.read() + 1);
 
-
-            self.emit(UserRegistered {
-                user: caller,
-                name,
-            });
+            self.emit(UserRegistered { user: caller, name });
 
             true
         }
