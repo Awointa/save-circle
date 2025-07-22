@@ -1,10 +1,12 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use save_circle::contracts::Savecircle::SaveCircle;
+use save_circle::contracts::Savecircle::SaveCircle::Event;
+use save_circle::events::Events::UserRegistered;
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
 use save_circle::structs::Structs::UserProfile;
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
-    stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
+    start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const};
 
@@ -64,3 +66,23 @@ fn test_register_user_success() {
     stop_cheat_caller_address(contract_address);
 }
 
+#[test]
+fn test_register_user_event() {
+    let (contract_address, owner, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    let mut spy = spy_events();
+
+    let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
+    start_cheat_caller_address(contract_address, user);
+
+    let name: felt252 = 'bob_the_builder';
+    let avatar: felt252 = 'https://example.com/avatar.png';
+
+    let result = dispatcher.register_user(name, avatar);
+
+    spy
+        .assert_emitted(
+            @array![(contract_address, Event::UserRegistered(UserRegistered { user, name }))],
+        );
+}
