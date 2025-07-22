@@ -1,5 +1,7 @@
+use starknet::ContractAddress;
+
 #[derive(Drop, starknet::Event)]
-struct UserRegistered {
-    user: ContractAddress,
-    name: felt252,
+pub struct UserRegistered {
+  pub  user: ContractAddress,
+  pub  name: felt252,
 }
