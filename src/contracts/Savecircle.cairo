@@ -6,7 +6,8 @@ const UPGRADER_ROLE: felt252 = selector!("UPGRADER_ROLE");
 
 #[starknet::contract]
 pub mod SaveCircle {
-    use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
+    use starknet::event::EventEmitter;
+use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -20,6 +21,7 @@ pub mod SaveCircle {
     };
     use starknet::{ClassHash, ContractAddress, get_caller_address};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
+    use save_circle::events::Events::UserRegistered;
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
@@ -67,7 +69,7 @@ pub mod SaveCircle {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         // Add Events after importing it above
-
+        UserRegistered: UserRegistered,
     }
 
     #[constructor]
@@ -130,6 +132,12 @@ pub mod SaveCircle {
             user_entry.write(new_profile);
 
             self.total_users.write(self.total_users.read() + 1);
+
+
+            self.emit(UserRegistered {
+                user: caller,
+                name,
+            });
 
             true
         }
