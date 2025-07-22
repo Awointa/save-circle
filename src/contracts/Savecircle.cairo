@@ -12,11 +12,12 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::interfaces::Isavecircle::Isavecircle;
+    use save_circle::structs::Structs::UserProfile;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess, Vec,
     };
-    use starknet::{ClassHash, ContractAddress};
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -46,8 +47,9 @@ pub mod SaveCircle {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
-        // contract
-        balance: felt252,
+        //user profiles
+        user_profiles: Map<ContractAddress, UserProfile>,
+        total_users: u256,
     }
 
     #[event]
@@ -105,13 +107,36 @@ pub mod SaveCircle {
 
     #[abi(embed_v0)]
     impl SavecircleImpl of Isavecircle<ContractState> {
-        fn increase_balance(ref self: ContractState, amount: felt252) {
-            assert(amount != 0, 'Amount cannot be 0');
-            self.balance.write(self.balance.read() + amount);
+        fn register_user(ref self: ContractState, name: felt252, avatar: felt252) -> bool {
+            let caller = get_caller_address();
+
+            // Check if user is already registered using entry pattern
+            let user_entry = self.user_profiles.entry(caller);
+            let existing_profile = user_entry.read();
+            assert(!existing_profile.is_registered, ' User already registered');
+
+            // Validate inputs
+            assert(name != 0, ' Name cannot be empty');
+            // Consider adding max length check
+            // assert(name.len() <= MAX_NAME_LENGTH, 'SaveCircle: Name too long');
+
+            // Create and store new profile
+            let new_profile = UserProfile {
+                user_address: caller, name, avatar, is_registered: true, total_lock_amount: 0,
+            };
+
+            // Single write operation using the entry
+            user_entry.write(new_profile);
+
+            // Update total users count
+            self.total_users.write(self.total_users.read() + 1);
+
+            true
         }
 
-        fn get_balance(self: @ContractState) -> felt252 {
-            self.balance.read()
+
+        fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
+            self.user_profiles.entry(user_address).read()
         }
     }
 }
