@@ -68,7 +68,7 @@ fn test_register_user_success() {
 
 #[test]
 fn test_register_user_event() {
-    let (contract_address, owner, _token_address) = setup();
+    let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
 
     let mut spy = spy_events();
@@ -79,7 +79,7 @@ fn test_register_user_event() {
     let name: felt252 = 'bob_the_builder';
     let avatar: felt252 = 'https://example.com/avatar.png';
 
-    let result = dispatcher.register_user(name, avatar);
+    dispatcher.register_user(name, avatar);
 
     spy
         .assert_emitted(
