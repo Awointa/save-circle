@@ -9,6 +9,7 @@ pub mod SaveCircle {
     use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::security::pausable::PausableComponent;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::interfaces::Isavecircle::Isavecircle;
@@ -47,6 +48,8 @@ pub mod SaveCircle {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
+        // payment token address
+        payment_token_address: ContractAddress,
         //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
         total_users: u256,
@@ -68,12 +71,16 @@ pub mod SaveCircle {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, default_admin: ContractAddress) {
+    fn constructor(
+        ref self: ContractState, default_admin: ContractAddress, token_address: ContractAddress,
+    ) {
         self.accesscontrol.initializer();
 
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
         self.accesscontrol._grant_role(PAUSER_ROLE, default_admin);
         self.accesscontrol._grant_role(UPGRADER_ROLE, default_admin);
+
+        self.payment_token_address.write(token_address);
     }
 
     #[generate_trait]
@@ -110,25 +117,18 @@ pub mod SaveCircle {
         fn register_user(ref self: ContractState, name: felt252, avatar: felt252) -> bool {
             let caller = get_caller_address();
 
-            // Check if user is already registered using entry pattern
             let user_entry = self.user_profiles.entry(caller);
             let existing_profile = user_entry.read();
             assert(!existing_profile.is_registered, ' User already registered');
 
-            // Validate inputs
             assert(name != 0, ' Name cannot be empty');
-            // Consider adding max length check
-            // assert(name.len() <= MAX_NAME_LENGTH, 'SaveCircle: Name too long');
 
-            // Create and store new profile
             let new_profile = UserProfile {
                 user_address: caller, name, avatar, is_registered: true, total_lock_amount: 0,
             };
 
-            // Single write operation using the entry
             user_entry.write(new_profile);
 
-            // Update total users count
             self.total_users.write(self.total_users.read() + 1);
 
             true
