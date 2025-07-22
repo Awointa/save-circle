@@ -9,14 +9,16 @@ pub mod SaveCircle {
     use openzeppelin::access::accesscontrol::{AccessControlComponent, DEFAULT_ADMIN_ROLE};
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::security::pausable::PausableComponent;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::interfaces::Isavecircle::Isavecircle;
+    use save_circle::structs::Structs::UserProfile;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
         StoragePointerWriteAccess, Vec,
     };
-    use starknet::{ClassHash, ContractAddress};
+    use starknet::{ClassHash, ContractAddress, get_caller_address};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -46,8 +48,11 @@ pub mod SaveCircle {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
-        // contract
-        balance: felt252,
+        // payment token address
+        payment_token_address: ContractAddress,
+        //user profiles
+        user_profiles: Map<ContractAddress, UserProfile>,
+        total_users: u256,
     }
 
     #[event]
@@ -66,12 +71,16 @@ pub mod SaveCircle {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, default_admin: ContractAddress) {
+    fn constructor(
+        ref self: ContractState, default_admin: ContractAddress, token_address: ContractAddress,
+    ) {
         self.accesscontrol.initializer();
 
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
         self.accesscontrol._grant_role(PAUSER_ROLE, default_admin);
         self.accesscontrol._grant_role(UPGRADER_ROLE, default_admin);
+
+        self.payment_token_address.write(token_address);
     }
 
     #[generate_trait]
@@ -105,13 +114,29 @@ pub mod SaveCircle {
 
     #[abi(embed_v0)]
     impl SavecircleImpl of Isavecircle<ContractState> {
-        fn increase_balance(ref self: ContractState, amount: felt252) {
-            assert(amount != 0, 'Amount cannot be 0');
-            self.balance.write(self.balance.read() + amount);
+        fn register_user(ref self: ContractState, name: felt252, avatar: felt252) -> bool {
+            let caller = get_caller_address();
+
+            let user_entry = self.user_profiles.entry(caller);
+            let existing_profile = user_entry.read();
+            assert(!existing_profile.is_registered, ' User already registered');
+
+            assert(name != 0, ' Name cannot be empty');
+
+            let new_profile = UserProfile {
+                user_address: caller, name, avatar, is_registered: true, total_lock_amount: 0,
+            };
+
+            user_entry.write(new_profile);
+
+            self.total_users.write(self.total_users.read() + 1);
+
+            true
         }
 
-        fn get_balance(self: @ContractState) -> felt252 {
-            self.balance.read()
+
+        fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
+            self.user_profiles.entry(user_address).read()
         }
     }
 }

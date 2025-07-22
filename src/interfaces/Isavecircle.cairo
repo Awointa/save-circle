@@ -1,7 +1,8 @@
+use save_circle::structs::Structs::UserProfile;
+use starknet::ContractAddress;
+
 #[starknet::interface]
 pub trait Isavecircle<TContractState> {
-    /// Increase contract balance.
-    fn increase_balance(ref self: TContractState, amount: felt252);
-    /// Retrieve contract balance.
-    fn get_balance(self: @TContractState) -> felt252;
+    fn register_user(ref self: TContractState, name: felt252, avatar: felt252) -> bool;
+    fn get_user_profile(self: @TContractState, user_address: ContractAddress) -> UserProfile;
 }
