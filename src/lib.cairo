@@ -14,3 +14,7 @@ pub mod structs {
 pub mod events {
     pub mod Events;
 }
+
+pub mod enums {
+    pub mod Enums;
+}
