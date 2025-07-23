@@ -7,9 +7,8 @@ pub enum LockType {
 }
 
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 pub enum TimeUnit {
-    Hours,
     Days,
     Weeks,
     Months,
@@ -25,7 +24,7 @@ pub enum GroupState {
 }
 
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde,  starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
 pub enum GroupVisibility {
     Public,
     Private,

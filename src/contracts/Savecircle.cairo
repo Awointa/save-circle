@@ -12,15 +12,16 @@ pub mod SaveCircle {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use save_circle::events::Events::UserRegistered;
+    use save_circle::events::Events::{UserRegistered, GroupCreated};
     use save_circle::interfaces::Isavecircle::Isavecircle;
-    use save_circle::structs::Structs::{GroupInfo, UserProfile, joined_group};
+    use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
+    use save_circle::enums::Enums::{LockType, TimeUnit, GroupVisibility, GroupState};
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
-        StoragePointerWriteAccess, Vec,
+        Map, StorageMapReadAccess,StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
+        StoragePointerWriteAccess, Vec, MutableVecTrait
     };
-    use starknet::{ClassHash, ContractAddress, get_caller_address};
+    use starknet::{ClassHash, ContractAddress, get_caller_address, get_block_timestamp};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -54,12 +55,18 @@ pub mod SaveCircle {
         payment_token_address: ContractAddress,
         //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
-        group: Map<u64, GroupInfo>,
-        joined_groups: Map<ContractAddress, joined_group>,
-        group_members: Map<(u64, u32), ContractAddress>,
-        group_payout_order: Map<(u64, u32), ContractAddress>,
+
+        groups: Map<u256, GroupInfo>,
+        joined_groups: Map<(ContractAddress, u64), joined_group>,
+        group_members: Map<(u64, ContractAddress), GroupMember>,
+        public_groups: Vec<u256>,
+        group_invitations: Map<(u64, ContractAddress), bool>,
+        next_group_id: u256,
+
+        user_payout_index: Map<(u64, ContractAddress), u32>,
         group_invited_members: Map<(u64, u32), ContractAddress>,
         total_users: u256,
+        
     }
 
     #[event]
@@ -75,6 +82,7 @@ pub mod SaveCircle {
         UpgradeableEvent: UpgradeableComponent::Event,
         // Add Events after importing it above
         UserRegistered: UserRegistered,
+        GroupCreated: GroupCreated,
     }
 
     #[constructor]
@@ -88,6 +96,8 @@ pub mod SaveCircle {
         self.accesscontrol._grant_role(UPGRADER_ROLE, default_admin);
 
         self.payment_token_address.write(token_address);
+        self.next_group_id.write(1);
+
     }
 
     #[generate_trait]
@@ -151,6 +161,62 @@ pub mod SaveCircle {
 
         fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
             self.user_profiles.entry(user_address).read()
+        }
+
+        fn create_group(ref self: ContractState, member_limit: u8, contribution_amount: u256, lock_type: LockType, cycle_duration: u64, cycle_unit: TimeUnit, visibility: GroupVisibility, requires_lock:bool, min_reputation_score: u32) -> u256{
+            let caller = get_caller_address();
+            let group_id = self.next_group_id.read();
+            let current_time = get_block_timestamp();
+        
+
+            let user_entry = self.user_profiles.entry(caller);
+            let existing_profile = user_entry.read();
+            assert!(existing_profile.is_registered, "Only registered use can create group");
+
+            // calculate total cycles based on the member limit 
+            let total_cycles =  member_limit;
+
+            let group_info = GroupInfo {
+                group_id,
+                creator: caller,
+                member_limit,
+                contribution_amount,
+                lock_type,
+                cycle_duration,
+                cycle_unit,
+                members: 0,
+                state: GroupState::Created,
+                current_cycle: 0,
+                payout_order: 0,
+                start_time: current_time,
+                total_cycles,
+                visibility,
+                requires_lock,
+                requires_reputation_score: min_reputation_score,
+                invited_members: 0,
+            };
+
+            self.groups.write(group_id, group_info);
+
+            if visibility == GroupVisibility::Public {
+                self.public_groups.push(group_id)
+            }
+
+            self.next_group_id.write(group_id + 1);
+
+            self.emit(GroupCreated {
+                group_id,
+                creator: caller,
+                member_limit,
+                contribution_amount,
+                cycle_duration,
+                cycle_unit,
+                visibility,
+                requires_lock
+
+            });
+
+            group_id
         }
     }
 }
