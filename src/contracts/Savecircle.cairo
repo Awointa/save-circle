@@ -14,7 +14,7 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::events::Events::UserRegistered;
     use save_circle::interfaces::Isavecircle::Isavecircle;
-    use save_circle::structs::Structs::{UserProfile, joined_group};
+    use save_circle::structs::Structs::{GroupInfo, UserProfile, joined_group};
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, StorageMapReadAccess, StoragePathEntry, StoragePointerReadAccess,
@@ -54,7 +54,11 @@ pub mod SaveCircle {
         payment_token_address: ContractAddress,
         //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
+        group: Map<u64, GroupInfo>,
         joined_groups: Map<ContractAddress, joined_group>,
+        group_members: Map<(u64, u32), ContractAddress>,
+        group_payout_order: Map<(u64, u32), ContractAddress>,
+        group_invited_members: Map<(u64, u32), ContractAddress>,
         total_users: u256,
     }
 
