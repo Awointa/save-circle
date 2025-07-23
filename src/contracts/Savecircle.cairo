@@ -13,7 +13,7 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-    use save_circle::events::Events::{GroupCreated, UserRegistered, UserInvited};
+    use save_circle::events::Events::{GroupCreated, UserInvited, UserRegistered};
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
     use starknet::event::EventEmitter;
@@ -63,7 +63,6 @@ pub mod SaveCircle {
         next_group_id: u256,
         user_payout_index: Map<(u64, ContractAddress), u32>,
         group_invited_members: Map<(u256, u32), ContractAddress>,
-        
         total_users: u256,
     }
 
@@ -232,12 +231,18 @@ pub mod SaveCircle {
             self.groups.read(group_id)
         }
 
-        fn create_private_group(ref self: ContractState, member_limit: u8, contribution_amount: u256, cycle_duration: u64, cycle_unit: TimeUnit, invited_members: Array<ContractAddress>) -> u256 {
-
-            let caller= get_caller_address();
+        fn create_private_group(
+            ref self: ContractState,
+            member_limit: u8,
+            contribution_amount: u256,
+            cycle_duration: u64,
+            cycle_unit: TimeUnit,
+            invited_members: Array<ContractAddress>,
+        ) -> u256 {
+            let caller = get_caller_address();
             let group_id = self.next_group_id.read();
 
-            // create private group with no lock requirements and trust-based 
+            // create private group with no lock requirements and trust-based
             let group_info = GroupInfo {
                 group_id,
                 creator: caller,
@@ -260,29 +265,28 @@ pub mod SaveCircle {
 
             self.groups.write(group_id, group_info);
 
-            // spend invitations to all specified members 
+            // spend invitations to all specified members
             let mut i = 0;
             while i < invited_members.len() {
                 let invitee = invited_members[i];
                 self.group_invitations.write((group_id, *invitee), true);
-                self.emit(UserInvited {
-                    group_id,
-                    inviter: caller,
-                    invitee: *invitee,
-                });
+                self.emit(UserInvited { group_id, inviter: caller, invitee: *invitee });
             }
             self.next_group_id.write(group_id + 1);
 
-            self.emit(GroupCreated {
-                group_id,
-                creator: caller,
-                member_limit,
-                contribution_amount,
-                cycle_duration,
-                cycle_unit,
-                visibility: GroupVisibility::Private,
-                requires_lock: false,
-            });
+            self
+                .emit(
+                    GroupCreated {
+                        group_id,
+                        creator: caller,
+                        member_limit,
+                        contribution_amount,
+                        cycle_duration,
+                        cycle_unit,
+                        visibility: GroupVisibility::Private,
+                        requires_lock: false,
+                    },
+                );
 
             group_id
         }

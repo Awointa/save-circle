@@ -2,7 +2,7 @@ use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTr
 use save_circle::contracts::Savecircle::SaveCircle;
 use save_circle::contracts::Savecircle::SaveCircle::Event;
 use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::UserRegistered;
+use save_circle::events::Events::{GroupCreated, UserInvited, UserRegistered};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
 use save_circle::structs::Structs::UserProfile;
 use snforge_std::{
@@ -134,5 +134,49 @@ fn test_create_group_success() {
     assert(created_group.invited_members == 0, 'invited_members mismatch');
 
     stop_cheat_caller_address(contract_address);
+}
+
+#[test]
+fn test_create_group_event() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    let mut spy = spy_events();
+
+    let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
+    start_cheat_caller_address(contract_address, user);
+
+    // register user
+    let name: felt252 = 'bob_the_builder';
+    let avatar: felt252 = 'https://example.com/avatar.png';
+
+    dispatcher.register_user(name, avatar);
+
+    // create group
+    dispatcher
+        .create_group(
+            1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+        );
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GroupCreated(
+                        GroupCreated {
+                            group_id: 1,
+                            creator: user,
+                            member_limit: 1,
+                            contribution_amount: 100,
+                            cycle_duration: 1,
+                            cycle_unit: TimeUnit::Days,
+                            visibility: GroupVisibility::Public,
+                            requires_lock: false,
+                        },
+                    ),
+                ),
+            ],
+        );
 }
 

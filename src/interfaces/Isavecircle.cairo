@@ -21,5 +21,12 @@ pub trait Isavecircle<TContractState> {
 
     fn get_group_info(self: @TContractState, group_id: u256) -> GroupInfo;
 
-    fn create_private_group(ref self: TContractState, member_limit: u8, contribution_amount: u256, cycle_duration: u64, cycle_unit: TimeUnit, invited_members: Array<ContractAddress>) -> u256;
+    fn create_private_group(
+        ref self: TContractState,
+        member_limit: u8,
+        contribution_amount: u256,
+        cycle_duration: u64,
+        cycle_unit: TimeUnit,
+        invited_members: Array<ContractAddress>,
+    ) -> u256;
 }
