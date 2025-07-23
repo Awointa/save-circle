@@ -218,6 +218,10 @@ pub mod SaveCircle {
 
             group_id
         }
+
+        fn get_group_info(self: @ContractState, group_id: u256) -> GroupInfo {
+            self.groups.read(group_id)
+        }
     }
 }
 
