@@ -1,6 +1,7 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use save_circle::contracts::Savecircle::SaveCircle;
 use save_circle::contracts::Savecircle::SaveCircle::Event;
+use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
 use save_circle::events::Events::UserRegistered;
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
 use save_circle::structs::Structs::UserProfile;
@@ -8,7 +9,6 @@ use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address,
 };
-use save_circle::enums::Enums::{LockType, TimeUnit, GroupVisibility, GroupState};
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
 
@@ -96,18 +96,21 @@ fn test_create_group_success() {
     let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
     start_cheat_caller_address(contract_address, user);
 
-    // register user 
+    // register user
     let name: felt252 = 'bob_the_builder';
     let avatar: felt252 = 'https://example.com/avatar.png';
 
     dispatcher.register_user(name, avatar);
 
-     // Check that the user profile is stored correctly
-     let profile: UserProfile = dispatcher.get_user_profile(user);
+    // Check that the user profile is stored correctly
+    let profile: UserProfile = dispatcher.get_user_profile(user);
 
     // create group
     let now = get_block_timestamp();
-    dispatcher.create_group(1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0);
+    dispatcher
+        .create_group(
+            1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+        );
 
     let created_group = dispatcher.get_group_info(1);
 
@@ -132,3 +135,4 @@ fn test_create_group_success() {
 
     stop_cheat_caller_address(contract_address);
 }
+

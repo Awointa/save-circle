@@ -12,16 +12,16 @@ pub mod SaveCircle {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use save_circle::events::Events::{UserRegistered, GroupCreated};
+    use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
+    use save_circle::events::Events::{GroupCreated, UserRegistered, UserInvited};
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
-    use save_circle::enums::Enums::{LockType, TimeUnit, GroupVisibility, GroupState};
     use starknet::event::EventEmitter;
     use starknet::storage::{
-        Map, StorageMapReadAccess,StorageMapWriteAccess, StoragePathEntry, StoragePointerReadAccess,
-        StoragePointerWriteAccess, Vec, MutableVecTrait
+        Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
+        StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
-    use starknet::{ClassHash, ContractAddress, get_caller_address, get_block_timestamp};
+    use starknet::{ClassHash, ContractAddress, get_block_timestamp, get_caller_address};
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -55,18 +55,16 @@ pub mod SaveCircle {
         payment_token_address: ContractAddress,
         //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
-
         groups: Map<u256, GroupInfo>,
         joined_groups: Map<(ContractAddress, u64), joined_group>,
         group_members: Map<(u64, ContractAddress), GroupMember>,
         public_groups: Vec<u256>,
-        group_invitations: Map<(u64, ContractAddress), bool>,
+        group_invitations: Map<(u256, ContractAddress), bool>,
         next_group_id: u256,
-
         user_payout_index: Map<(u64, ContractAddress), u32>,
-        group_invited_members: Map<(u64, u32), ContractAddress>,
-        total_users: u256,
+        group_invited_members: Map<(u256, u32), ContractAddress>,
         
+        total_users: u256,
     }
 
     #[event]
@@ -83,6 +81,7 @@ pub mod SaveCircle {
         // Add Events after importing it above
         UserRegistered: UserRegistered,
         GroupCreated: GroupCreated,
+        UserInvited: UserInvited,
     }
 
     #[constructor]
@@ -97,7 +96,6 @@ pub mod SaveCircle {
 
         self.payment_token_address.write(token_address);
         self.next_group_id.write(1);
-
     }
 
     #[generate_trait]
@@ -163,18 +161,27 @@ pub mod SaveCircle {
             self.user_profiles.entry(user_address).read()
         }
 
-        fn create_group(ref self: ContractState, member_limit: u8, contribution_amount: u256, lock_type: LockType, cycle_duration: u64, cycle_unit: TimeUnit, visibility: GroupVisibility, requires_lock:bool, min_reputation_score: u32) -> u256{
+        fn create_group(
+            ref self: ContractState,
+            member_limit: u8,
+            contribution_amount: u256,
+            lock_type: LockType,
+            cycle_duration: u64,
+            cycle_unit: TimeUnit,
+            visibility: GroupVisibility,
+            requires_lock: bool,
+            min_reputation_score: u32,
+        ) -> u256 {
             let caller = get_caller_address();
             let group_id = self.next_group_id.read();
             let current_time = get_block_timestamp();
-        
 
             let user_entry = self.user_profiles.entry(caller);
             let existing_profile = user_entry.read();
             assert!(existing_profile.is_registered, "Only registered use can create group");
 
-            // calculate total cycles based on the member limit 
-            let total_cycles =  member_limit;
+            // calculate total cycles based on the member limit
+            let total_cycles = member_limit;
 
             let group_info = GroupInfo {
                 group_id,
@@ -204,6 +211,68 @@ pub mod SaveCircle {
 
             self.next_group_id.write(group_id + 1);
 
+            self
+                .emit(
+                    GroupCreated {
+                        group_id,
+                        creator: caller,
+                        member_limit,
+                        contribution_amount,
+                        cycle_duration,
+                        cycle_unit,
+                        visibility,
+                        requires_lock,
+                    },
+                );
+
+            group_id
+        }
+
+        fn get_group_info(self: @ContractState, group_id: u256) -> GroupInfo {
+            self.groups.read(group_id)
+        }
+
+        fn create_private_group(ref self: ContractState, member_limit: u8, contribution_amount: u256, cycle_duration: u64, cycle_unit: TimeUnit, invited_members: Array<ContractAddress>) -> u256 {
+
+            let caller= get_caller_address();
+            let group_id = self.next_group_id.read();
+
+            // create private group with no lock requirements and trust-based 
+            let group_info = GroupInfo {
+                group_id,
+                creator: caller,
+                member_limit,
+                contribution_amount,
+                lock_type: LockType::Upfront,
+                cycle_duration,
+                cycle_unit,
+                members: 0,
+                state: GroupState::Created,
+                current_cycle: 0,
+                payout_order: 0,
+                start_time: get_block_timestamp(),
+                total_cycles: member_limit,
+                visibility: GroupVisibility::Private,
+                requires_lock: false,
+                requires_reputation_score: 0,
+                invited_members: invited_members.len(),
+            };
+
+            self.groups.write(group_id, group_info);
+
+            // spend invitations to all specified members 
+            let mut i = 0;
+            while i < invited_members.len() {
+                let invitee = invited_members[i];
+                self.group_invitations.write((group_id, *invitee), true);
+                self.emit(UserInvited {
+                    group_id,
+                    inviter: caller,
+                    invitee: *invitee,
+                });
+            }
+            self.next_group_id.write(group_id + 1);
+
             self.emit(GroupCreated {
                 group_id,
                 creator: caller,
@@ -211,16 +280,11 @@ pub mod SaveCircle {
                 contribution_amount,
                 cycle_duration,
                 cycle_unit,
-                visibility,
-                requires_lock
-
+                visibility: GroupVisibility::Private,
+                requires_lock: false,
             });
 
             group_id
-        }
-
-        fn get_group_info(self: @ContractState, group_id: u256) -> GroupInfo {
-            self.groups.read(group_id)
         }
     }
 }
