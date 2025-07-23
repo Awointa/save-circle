@@ -1,5 +1,5 @@
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, PartialEq, starknet::Store)]
 pub enum LockType {
     Progressive,
     Upfront,
@@ -7,7 +7,7 @@ pub enum LockType {
 }
 
 #[allow(starknet::store_no_default_variant)]
-#[derive(Copy, Drop, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
 pub enum TimeUnit {
     Days,
     Weeks,
@@ -15,7 +15,7 @@ pub enum TimeUnit {
 }
 
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, PartialEq, starknet::Store)]
 pub enum GroupState {
     Created,
     Active,
