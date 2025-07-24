@@ -273,7 +273,7 @@ pub mod SaveCircle {
             self.groups.write(group_id, group_info);
 
             // Initialize member index counter for this group
-            self.group_next_member_index.write(group_id, 0);
+            self.group_next_member_index.write(group_id, 1);
 
             // spend invitations to all specified members
             assert!(invited_members.len() <= 1000, "Exceed max invite limit");
@@ -326,7 +326,7 @@ pub mod SaveCircle {
 
             // check if user is a group member
             let existing_member_index = self.user_joined_groups.read((caller, group_id));
-            assert!(existing_member_index != 0, "User is already a member");
+            assert!(existing_member_index == 0, "User is already a member");
 
             // for private groups
             if group_info.visibility == GroupVisibility::Private {
@@ -336,7 +336,7 @@ pub mod SaveCircle {
 
             // lets get member index
             let member_index = self.group_next_member_index.read(group_id);
-            assert!(member_index < group_info.member_limit, "Group is full");
+            assert!(member_index <= group_info.member_limit, "Group is full");
 
             // Create new member info
             let group_member = GroupMember {

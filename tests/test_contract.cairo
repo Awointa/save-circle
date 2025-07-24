@@ -298,3 +298,142 @@ fn test_create_private_group_event() {
             ],
         );
 }
+
+
+#[test]
+fn test_join_group() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    // Create users
+    let creator: ContractAddress = contract_address_const::<'1'>();
+    let joiner: ContractAddress = contract_address_const::<'2'>();
+
+    // Register creator
+    start_cheat_caller_address(contract_address, creator);
+    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    stop_cheat_caller_address(contract_address);
+
+    // Register joiner
+    start_cheat_caller_address(contract_address, joiner);
+    dispatcher.register_user('Joiner', 'https://example.com/joiner.png');
+    stop_cheat_caller_address(contract_address);
+
+    // create group
+    start_cheat_caller_address(contract_address, creator);
+    let now = get_block_timestamp();
+    dispatcher
+        .create_group(
+            1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+        );
+
+    let created_group = dispatcher.get_group_info(1);
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, joiner);
+    // join group
+
+    let member_index = dispatcher.join_group(1);
+
+    stop_cheat_caller_address(contract_address);
+
+    // Check that the user is a member of the group
+
+    assert(member_index == 0, 'member_index should be 1');
+
+    //verify group member
+    let group_member = dispatcher.get_group_member(1, member_index);
+    assert(group_member.user == joiner, 'user mismatch');
+    assert(group_member.group_id == 1, 'group_id mismatch');
+    assert(group_member.member_index == 0, 'member_index mismatch');
+    assert(group_member.locked_amount == 0, 'locked_amount should be 0');
+    assert(group_member.has_been_paid == false, 'has_been_paid should be false');
+    assert(group_member.contribution_count == 0, 'contribution_count should be 0');
+    assert(group_member.late_contributions == 0, 'late_contributions should be 0');
+    assert(group_member.missed_contributions == 0, 'missed_contr should be 0');
+
+    // Verify user's member index
+    let user_member_index = dispatcher.get_user_member_index(joiner, 1);
+    assert(user_member_index == 0, 'user_member_index should be 0');
+
+    // Verify membership status
+    let is_member = dispatcher.is_group_member(1, joiner);
+    assert(is_member == true, 'should be a member');
+
+    // Verify group member count increased
+    let updated_group = dispatcher.get_group_info(1);
+    assert(updated_group.members == 1, 'group members should be 1');
+}
+
+
+#[test]
+fn test_group_member_with_multiple_members() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    // Create users
+    let creator: ContractAddress = contract_address_const::<'1'>();
+    let joiner1: ContractAddress = contract_address_const::<'2'>();
+    let joiner2: ContractAddress = contract_address_const::<'3'>();
+    let joiner3: ContractAddress = contract_address_const::<'4'>();
+
+    // Register users
+    start_cheat_caller_address(contract_address, creator);
+    dispatcher.register_user('creator', 'https://example.com/creator.png');
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, joiner1);
+    dispatcher.register_user('joiner1', 'https://example.com/joiner1.png');
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, joiner2);
+    dispatcher.register_user('joiner2', 'https://example.com/joiner2.png');
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, joiner3);
+    dispatcher.register_user('joiner3', 'https://example.com/joiner3.png');
+    stop_cheat_caller_address(contract_address);
+
+    // Creator creates a public group
+    start_cheat_caller_address(contract_address, creator);
+    let group_id = dispatcher
+        .create_group(
+            10, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+        );
+
+    stop_cheat_caller_address(contract_address);
+
+    // First joiner joins
+    start_cheat_caller_address(contract_address, joiner1);
+    let member_index1 = dispatcher.join_group(group_id);
+    stop_cheat_caller_address(contract_address);
+
+    // Second joiner joins
+    start_cheat_caller_address(contract_address, joiner2);
+    let member_index2 = dispatcher.join_group(group_id);
+    stop_cheat_caller_address(contract_address);
+
+    // Third joiner joins
+    start_cheat_caller_address(contract_address, joiner3);
+    let member_index3 = dispatcher.join_group(group_id);
+    stop_cheat_caller_address(contract_address);
+
+    // Verify sequential member indices
+    assert(member_index1 == 0, 'first memb should have index 0');
+    assert(member_index2 == 1, 'second memb should have index 1');
+    assert(member_index3 == 2, 'third memb should have index 2');
+
+    // Verify all members can be retrieved
+    let member1 = dispatcher.get_group_member(group_id, 0);
+    let member2 = dispatcher.get_group_member(group_id, 1);
+    let member3 = dispatcher.get_group_member(group_id, 2);
+
+    assert(member1.user == joiner1, 'member1 user mismatch');
+    assert(member2.user == joiner2, 'member2 user mismatch');
+    assert(member3.user == joiner3, 'member3 user mismatch');
+
+    // Verify group member count
+    let updated_group = dispatcher.get_group_info(group_id);
+    assert(updated_group.members == 3, 'group members should be 3');
+}
+
