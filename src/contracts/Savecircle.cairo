@@ -13,7 +13,7 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-    use save_circle::events::Events::{GroupCreated, UserInvited, UserRegistered};
+    use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited};
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
     use starknet::event::EventEmitter;
@@ -80,7 +80,7 @@ pub mod SaveCircle {
         // Add Events after importing it above
         UserRegistered: UserRegistered,
         GroupCreated: GroupCreated,
-        UserInvited: UserInvited,
+        UsersInvited: UsersInvited,
     }
 
     #[constructor]
@@ -266,12 +266,21 @@ pub mod SaveCircle {
             self.groups.write(group_id, group_info);
 
             // spend invitations to all specified members
+            assert!(invited_members.len() <= 1000, "Exceed max invite limit");
             let mut i = 0;
             while i < invited_members.len() {
                 let invitee = invited_members[i];
                 self.group_invitations.write((group_id, *invitee), true);
-                self.emit(UserInvited { group_id, inviter: caller, invitee: *invitee });
+                i += 1;
             }
+            
+            self
+            .emit(
+                UsersInvited {
+                    group_id, inviter: caller, invitees: invited_members.clone(),
+                },
+            );
+
             self.next_group_id.write(group_id + 1);
 
             self
