@@ -248,9 +248,18 @@ pub mod SaveCircle {
             cycle_duration: u64,
             cycle_unit: TimeUnit,
             invited_members: Array<ContractAddress>,
+            requires_lock: bool,
+            lock_type: LockType,
+            min_reputation_score: u32,
         ) -> u256 {
             let caller = get_caller_address();
             let group_id = self.next_group_id.read();
+            let current_time = get_block_timestamp();
+
+            // 🔒 Validate lock_type if lock is required
+            if requires_lock {
+                assert!(lock_type != LockType::None, "Lock type required when locking is enabled");
+            }
 
             // create private group with no lock requirements and trust-based
             let group_info = GroupInfo {
@@ -258,18 +267,18 @@ pub mod SaveCircle {
                 creator: caller,
                 member_limit,
                 contribution_amount,
-                lock_type: LockType::Upfront,
+                lock_type,
                 cycle_duration,
                 cycle_unit,
                 members: 0,
                 state: GroupState::Created,
                 current_cycle: 0,
                 payout_order: 0,
-                start_time: get_block_timestamp(),
+                start_time: current_time,
                 total_cycles: member_limit,
                 visibility: GroupVisibility::Private,
-                requires_lock: false,
-                requires_reputation_score: 0,
+                requires_lock,
+                requires_reputation_score: min_reputation_score,
                 invited_members: invited_members.len(),
             };
 
@@ -304,7 +313,7 @@ pub mod SaveCircle {
                         cycle_duration,
                         cycle_unit,
                         visibility: GroupVisibility::Private,
-                        requires_lock: false,
+                        requires_lock,
                     },
                 );
 
