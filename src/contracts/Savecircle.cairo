@@ -273,13 +273,11 @@ pub mod SaveCircle {
                 self.group_invitations.write((group_id, *invitee), true);
                 i += 1;
             }
-            
+
             self
-            .emit(
-                UsersInvited {
-                    group_id, inviter: caller, invitees: invited_members.clone(),
-                },
-            );
+                .emit(
+                    UsersInvited { group_id, inviter: caller, invitees: invited_members.clone() },
+                );
 
             self.next_group_id.write(group_id + 1);
 

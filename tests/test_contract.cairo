@@ -2,7 +2,7 @@ use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTr
 use save_circle::contracts::Savecircle::SaveCircle;
 use save_circle::contracts::Savecircle::SaveCircle::Event;
 use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{GroupCreated, UsersInvited, UserRegistered};
+use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
 use save_circle::structs::Structs::UserProfile;
 use snforge_std::{
@@ -242,20 +242,59 @@ fn test_users_invited_event() {
     // create group
     dispatcher.create_private_group(1, 200, 1, TimeUnit::Days, invited_members.clone());
 
-   
-
-    spy.assert_emitted(
-        @array![
-            (
-                contract_address,
-                Event::UsersInvited(
-                    UsersInvited {
-                        group_id: 1,
-                        inviter: user,
-                        invitees: invited_members,
-                    },
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::UsersInvited(
+                        UsersInvited { group_id: 1, inviter: user, invitees: invited_members },
+                    ),
                 ),
-            ),
-        ],
-    );
+            ],
+        );
+}
+
+#[test]
+fn test_create_private_group_event() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
+    let user2: ContractAddress = contract_address_const::<'3'>(); // arbitrary test address
+    start_cheat_caller_address(contract_address, user);
+
+    let mut spy = spy_events();
+
+    // register user
+    let name: felt252 = 'bob_the_builder';
+    let avatar: felt252 = 'https://example.com/avatar.png';
+
+    dispatcher.register_user(name, avatar);
+
+    let invited_members = array![user2];
+
+    // create group
+    dispatcher.create_private_group(2, 1000, 4, TimeUnit::Weeks, invited_members.clone());
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    contract_address,
+                    Event::GroupCreated(
+                        GroupCreated {
+                            group_id: 1,
+                            creator: user,
+                            member_limit: 2,
+                            contribution_amount: 1000,
+                            cycle_duration: 4,
+                            cycle_unit: TimeUnit::Weeks,
+                            visibility: GroupVisibility::Private,
+                            requires_lock: false,
+                        },
+                    ),
+                ),
+            ],
+        );
 }
