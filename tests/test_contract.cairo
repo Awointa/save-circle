@@ -89,7 +89,7 @@ fn test_register_user_event() {
 }
 
 #[test]
-fn test_create_group_success() {
+fn test_create_public_group() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
 
@@ -108,7 +108,7 @@ fn test_create_group_success() {
     // create group
     let now = get_block_timestamp();
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -137,7 +137,7 @@ fn test_create_group_success() {
 }
 
 #[test]
-fn test_create_group_event() {
+fn test_create_public_group_event() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
 
@@ -154,7 +154,7 @@ fn test_create_group_event() {
 
     // create group
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -199,7 +199,10 @@ fn test_create_private_group_success() {
 
     let now = get_block_timestamp();
     // create group
-    dispatcher.create_private_group(1, 200, 1, TimeUnit::Days, invited_members);
+    dispatcher
+        .create_private_group(
+            1, 200, 1, TimeUnit::Days, invited_members, false, LockType::Upfront, 0,
+        );
 
     let created_group = dispatcher.get_group_info(1);
 
@@ -217,6 +220,51 @@ fn test_create_private_group_success() {
     assert!(created_group.start_time == now, "start_time mismatch");
     assert!(created_group.visibility == GroupVisibility::Private, "visibility mismatch");
     assert!(created_group.requires_lock == false, "requires_lock mismatch");
+    assert!(created_group.requires_reputation_score == 0, "requires_reputation_score mismatch");
+    assert!(created_group.invited_members == 1, "invited_members mismatch");
+}
+
+#[test]
+fn test_create_private_group_with_lock() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
+    let user2: ContractAddress = contract_address_const::<'3'>(); // arbitrary test address
+    start_cheat_caller_address(contract_address, user);
+
+    let mut spy = spy_events();
+    // register user
+    let name: felt252 = 'bob_the_builder';
+    let avatar: felt252 = 'https://example.com/avatar.png';
+
+    dispatcher.register_user(name, avatar);
+
+    let invited_members = array![user2];
+
+    let now = get_block_timestamp();
+    // create group
+    dispatcher
+        .create_private_group(
+            1, 200, 1, TimeUnit::Days, invited_members, true, LockType::Upfront, 0,
+        );
+
+    let created_group = dispatcher.get_group_info(1);
+
+    assert!(created_group.group_id == 1, "group_id mismatch");
+    assert!(created_group.creator == user, "creator mismatch");
+    assert!(created_group.member_limit == 1, "member_limit mismatch");
+    assert!(created_group.contribution_amount == 200, "contribution_amount mismatch");
+    assert!(created_group.lock_type == LockType::Upfront, "lock_type mismatch");
+    assert!(created_group.cycle_duration == 1, "cycle_duration mismatch");
+    assert!(created_group.cycle_unit == TimeUnit::Days, "cycle_unit mismatch");
+    assert!(created_group.members == 0, "members mismatch");
+    assert!(created_group.state == GroupState::Created, "state mismatch");
+    assert!(created_group.current_cycle == 0, "current_cycle mismatch");
+    assert!(created_group.payout_order == 0, "payout_order mismatch");
+    assert!(created_group.start_time == now, "start_time mismatch");
+    assert!(created_group.visibility == GroupVisibility::Private, "visibility mismatch");
+    assert!(created_group.requires_lock == true, "requires_lock mismatch");
     assert!(created_group.requires_reputation_score == 0, "requires_reputation_score mismatch");
     assert!(created_group.invited_members == 1, "invited_members mismatch");
 }
@@ -240,7 +288,10 @@ fn test_users_invited_event() {
     let invited_members = array![user2];
 
     // create group
-    dispatcher.create_private_group(1, 200, 1, TimeUnit::Days, invited_members.clone());
+    dispatcher
+        .create_private_group(
+            1, 200, 1, TimeUnit::Days, invited_members.clone(), false, LockType::None, 0,
+        );
 
     spy
         .assert_emitted(
@@ -275,7 +326,10 @@ fn test_create_private_group_event() {
     let invited_members = array![user2];
 
     // create group
-    dispatcher.create_private_group(2, 1000, 4, TimeUnit::Weeks, invited_members.clone());
+    dispatcher
+        .create_private_group(
+            2, 1000, 4, TimeUnit::Weeks, invited_members.clone(), false, LockType::None, 0,
+        );
 
     spy
         .assert_emitted(
@@ -323,7 +377,7 @@ fn test_join_group() {
     start_cheat_caller_address(contract_address, creator);
     let now = get_block_timestamp();
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -397,7 +451,7 @@ fn test_group_member_with_multiple_members() {
     // Creator creates a public group
     start_cheat_caller_address(contract_address, creator);
     let group_id = dispatcher
-        .create_group(
+        .create_public_group(
             10, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -464,7 +518,7 @@ fn test_user_joins_multiple_groups() {
     // Creator1 creates first group
     start_cheat_caller_address(contract_address, creator1);
     let group1_id = dispatcher
-        .create_group(
+        .create_public_group(
             5, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
     stop_cheat_caller_address(contract_address);
@@ -472,7 +526,7 @@ fn test_user_joins_multiple_groups() {
     // Creator2 creates second group
     start_cheat_caller_address(contract_address, creator2);
     let group2_id = dispatcher
-        .create_group(
+        .create_public_group(
             5, 200, LockType::Progressive, 1, TimeUnit::Weeks, GroupVisibility::Public, false, 0,
         );
     stop_cheat_caller_address(contract_address);

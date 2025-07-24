@@ -7,7 +7,7 @@ pub trait Isavecircle<TContractState> {
     fn register_user(ref self: TContractState, name: felt252, avatar: felt252) -> bool;
     fn get_user_profile(self: @TContractState, user_address: ContractAddress) -> UserProfile;
 
-    fn create_group(
+    fn create_public_group(
         ref self: TContractState,
         member_limit: u32,
         contribution_amount: u256,
@@ -28,6 +28,9 @@ pub trait Isavecircle<TContractState> {
         cycle_duration: u64,
         cycle_unit: TimeUnit,
         invited_members: Array<ContractAddress>,
+        requires_lock: bool,
+        lock_type: LockType,
+        min_reputation_score: u32,
     ) -> u256;
 
 

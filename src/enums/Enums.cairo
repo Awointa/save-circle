@@ -4,6 +4,7 @@ pub enum LockType {
     Progressive,
     Upfront,
     Hybrid,
+    None,
 }
 
 #[allow(starknet::store_no_default_variant)]
