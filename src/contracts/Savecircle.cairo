@@ -338,25 +338,21 @@ pub mod SaveCircle {
             let member_index = self.group_next_member_index.read(group_id);
             assert!(member_index <= group_info.member_limit, "Group is full");
 
-            // Create new member info
             let group_member = GroupMember {
                 user: caller,
                 group_id,
-                locked_amount: 0, // Will be set based on lock requirements
+                locked_amount: 0,
                 joined_at: current_time,
                 member_index,
-                payout_cycle: 0, // Will be assigned based on payout order logic
+                payout_cycle: 0,
                 has_been_paid: false,
                 contribution_count: 0,
                 late_contributions: 0,
                 missed_contributions: 0,
             };
 
-            //lets store the member
-
             self.group_members.write((group_id, member_index), group_member);
 
-            // lets track members with index
             self.user_joined_groups.write((caller, group_id), member_index);
 
             //lets update members count
@@ -369,7 +365,6 @@ pub mod SaveCircle {
                 self.group_invitations.write((group_id, caller), false);
             }
 
-            // Emit event
             self
                 .emit(
                     UserJoinedGroup {
@@ -381,21 +376,20 @@ pub mod SaveCircle {
         }
 
 
-        // Get member info by group and member index
         fn get_group_member(
             self: @ContractState, group_id: u256, member_index: u32,
         ) -> GroupMember {
             self.group_members.read((group_id, member_index))
         }
 
-        // Get user's member index in a specific group
+
         fn get_user_member_index(
             self: @ContractState, user: ContractAddress, group_id: u256,
         ) -> u32 {
             self.user_joined_groups.read((user, group_id))
         }
 
-        // Check if user is a member of a group
+
         fn is_group_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
             self._is_member(group_id, user)
         }

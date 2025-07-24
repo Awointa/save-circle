@@ -437,3 +437,88 @@ fn test_group_member_with_multiple_members() {
     assert(updated_group.members == 3, 'group members should be 3');
 }
 
+
+#[test]
+fn test_user_joins_multiple_groups() {
+    let (contract_address, _, _token_address) = setup();
+    let dispatcher = IsavecircleDispatcher { contract_address };
+
+    // Create users
+    let creator1: ContractAddress = contract_address_const::<'1'>();
+    let creator2: ContractAddress = contract_address_const::<'2'>();
+    let joiner: ContractAddress = contract_address_const::<'3'>();
+
+    // Register users
+    start_cheat_caller_address(contract_address, creator1);
+    dispatcher.register_user('Creator1', 'https://example.com/creor1.png');
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, creator2);
+    dispatcher.register_user('Creator2', 'https://example.com/creor2.png');
+    stop_cheat_caller_address(contract_address);
+
+    start_cheat_caller_address(contract_address, joiner);
+    dispatcher.register_user('Joiner', 'https://example.com/joiner.png');
+    stop_cheat_caller_address(contract_address);
+
+    // Creator1 creates first group
+    start_cheat_caller_address(contract_address, creator1);
+    let group1_id = dispatcher
+        .create_group(
+            5, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+        );
+    stop_cheat_caller_address(contract_address);
+
+    // Creator2 creates second group
+    start_cheat_caller_address(contract_address, creator2);
+    let group2_id = dispatcher
+        .create_group(
+            5, 200, LockType::Progressive, 1, TimeUnit::Weeks, GroupVisibility::Public, false, 0,
+        );
+    stop_cheat_caller_address(contract_address);
+
+    // Joiner joins first group
+    start_cheat_caller_address(contract_address, joiner);
+    let group1_member_index = dispatcher.join_group(group1_id);
+    stop_cheat_caller_address(contract_address);
+
+    // Verify first group membership
+    assert(dispatcher.is_group_member(group1_id, joiner), 'should be member of group1');
+    assert(group1_member_index == 0, 'should be member of group1');
+
+    let group1_member = dispatcher.get_group_member(group1_id, group1_member_index);
+    assert(group1_member.user == joiner, 'user mismatch in group1');
+    assert(group1_member.group_id == group1_id, 'group1_id mismatch');
+
+    // Joiner joins second group
+    start_cheat_caller_address(contract_address, joiner);
+    let group2_member_index = dispatcher.join_group(group2_id);
+    stop_cheat_caller_address(contract_address);
+
+    // Verify second group membership
+    assert(dispatcher.is_group_member(group2_id, joiner), 'should be member of group2');
+    assert(group2_member_index == 0, 'should be  member of group2');
+
+    let group2_member = dispatcher.get_group_member(group2_id, group2_member_index);
+    assert(group2_member.user == joiner, 'user mismatch in group2');
+    assert(group2_member.group_id == group2_id, 'group2_id mismatch');
+
+    // Verify user's member index in each group
+    let user_group1_index = dispatcher.get_user_member_index(joiner, group1_id);
+    let user_group2_index = dispatcher.get_user_member_index(joiner, group2_id);
+
+    assert(user_group1_index == group1_member_index, 'group1 member index mismatch');
+    assert(user_group2_index == group2_member_index, 'group2 member index mismatch');
+
+    // Verify both groups show the user as a member
+    assert(dispatcher.is_group_member(group1_id, joiner), 'should be member of group1');
+    assert(dispatcher.is_group_member(group2_id, joiner), 'should be member of group2');
+
+    // Verify group member counts
+    let group1_info = dispatcher.get_group_info(group1_id);
+    let group2_info = dispatcher.get_group_info(group2_id);
+
+    assert(group1_info.members == 1, 'group1 should have 1 member');
+    assert(group2_info.members == 1, 'group2 should have 1 member');
+}
+
