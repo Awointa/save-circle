@@ -28,6 +28,9 @@ pub trait Isavecircle<TContractState> {
         cycle_duration: u64,
         cycle_unit: TimeUnit,
         invited_members: Array<ContractAddress>,
+        requires_lock: bool,
+        lock_type: LockType,
+        min_reputation_score: u32,
     ) -> u256;
 
 
