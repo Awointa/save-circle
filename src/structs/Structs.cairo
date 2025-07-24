@@ -17,13 +17,14 @@ pub struct joined_group {
     user_address: ContractAddress,
     joined_at: u64,
     contribution_amount: u256,
+    member_index: u32,
 }
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct GroupInfo {
     pub group_id: u256,
     pub creator: ContractAddress,
-    pub member_limit: u8,
+    pub member_limit: u32,
     pub contribution_amount: u256,
     pub lock_type: LockType,
     pub cycle_duration: u64,
@@ -33,7 +34,7 @@ pub struct GroupInfo {
     pub current_cycle: u64,
     pub payout_order: u32,
     pub start_time: u64,
-    pub total_cycles: u8,
+    pub total_cycles: u32,
     pub visibility: GroupVisibility,
     pub requires_lock: bool,
     pub requires_reputation_score: u32,
@@ -42,14 +43,14 @@ pub struct GroupInfo {
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct GroupMember {
-    user: ContractAddress,
-    group_id: u256,
-    locked_amount: u256,
-    joined_at: u64,
-    member_index: u32,
-    payout_cycle: u32,
-    has_been_paid: bool,
-    contribution_count: u32,
-    late_contributions: u32,
-    missed_contributions: u32,
+    pub user: ContractAddress,
+    pub group_id: u256,
+    pub locked_amount: u256,
+    pub joined_at: u64,
+    pub member_index: u32,
+    pub payout_cycle: u32,
+    pub has_been_paid: bool,
+    pub contribution_count: u32,
+    pub late_contributions: u32,
+    pub missed_contributions: u32,
 }

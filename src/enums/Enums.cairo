@@ -1,5 +1,5 @@
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde, PartialEq, starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
 pub enum LockType {
     Progressive,
     Upfront,
@@ -15,7 +15,7 @@ pub enum TimeUnit {
 }
 
 #[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde, PartialEq, starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
 pub enum GroupState {
     Created,
     Active,
