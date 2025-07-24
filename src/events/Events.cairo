@@ -20,8 +20,8 @@ pub struct GroupCreated {
 }
 
 #[derive(Drop, starknet::Event)]
-pub struct UserInvited {
+pub struct UsersInvited {
     pub group_id: u256,
     pub inviter: ContractAddress,
-    pub invitee: ContractAddress,
+    pub invitees: Array<ContractAddress>,
 }
