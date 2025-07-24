@@ -211,6 +211,9 @@ pub mod SaveCircle {
 
             self.groups.write(group_id, group_info);
 
+            // Initialize member index counter for this group
+            self.group_next_member_index.write(group_id, 0);
+
             if visibility == GroupVisibility::Public {
                 self.public_groups.push(group_id)
             }
@@ -273,7 +276,7 @@ pub mod SaveCircle {
             self.groups.write(group_id, group_info);
 
             // Initialize member index counter for this group
-            self.group_next_member_index.write(group_id, 1);
+            self.group_next_member_index.write(group_id, 0);
 
             // spend invitations to all specified members
             assert!(invited_members.len() <= 1000, "Exceed max invite limit");
