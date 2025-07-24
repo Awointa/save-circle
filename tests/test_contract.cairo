@@ -89,7 +89,7 @@ fn test_register_user_event() {
 }
 
 #[test]
-fn test_create_group_success() {
+fn test_create_public_group() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
 
@@ -108,7 +108,7 @@ fn test_create_group_success() {
     // create group
     let now = get_block_timestamp();
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -137,7 +137,7 @@ fn test_create_group_success() {
 }
 
 #[test]
-fn test_create_group_event() {
+fn test_create_public_group_event() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
 
@@ -154,7 +154,7 @@ fn test_create_group_event() {
 
     // create group
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -377,7 +377,7 @@ fn test_join_group() {
     start_cheat_caller_address(contract_address, creator);
     let now = get_block_timestamp();
     dispatcher
-        .create_group(
+        .create_public_group(
             1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -451,7 +451,7 @@ fn test_group_member_with_multiple_members() {
     // Creator creates a public group
     start_cheat_caller_address(contract_address, creator);
     let group_id = dispatcher
-        .create_group(
+        .create_public_group(
             10, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
@@ -518,7 +518,7 @@ fn test_user_joins_multiple_groups() {
     // Creator1 creates first group
     start_cheat_caller_address(contract_address, creator1);
     let group1_id = dispatcher
-        .create_group(
+        .create_public_group(
             5, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
     stop_cheat_caller_address(contract_address);
@@ -526,7 +526,7 @@ fn test_user_joins_multiple_groups() {
     // Creator2 creates second group
     start_cheat_caller_address(contract_address, creator2);
     let group2_id = dispatcher
-        .create_group(
+        .create_public_group(
             5, 200, LockType::Progressive, 1, TimeUnit::Weeks, GroupVisibility::Public, false, 0,
         );
     stop_cheat_caller_address(contract_address);

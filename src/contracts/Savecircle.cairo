@@ -167,7 +167,7 @@ pub mod SaveCircle {
             self.user_profiles.entry(user_address).read()
         }
 
-        fn create_group(
+        fn create_public_group(
             ref self: ContractState,
             member_limit: u32,
             contribution_amount: u256,
