@@ -13,7 +13,7 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-    use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited};
+    use save_circle::events::Events::{GroupCreated, UserJoinedGroup, UserRegistered, UsersInvited};
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
     use starknet::event::EventEmitter;
@@ -57,13 +57,19 @@ pub mod SaveCircle {
         user_profiles: Map<ContractAddress, UserProfile>,
         groups: Map<u256, GroupInfo>,
         joined_groups: Map<(ContractAddress, u64), joined_group>,
-        group_members: Map<(u64, ContractAddress), GroupMember>,
+        group_members: Map<(u256, u32), GroupMember>,
         public_groups: Vec<u256>,
         group_invitations: Map<(u256, ContractAddress), bool>,
         next_group_id: u256,
         user_payout_index: Map<(u64, ContractAddress), u32>,
         group_invited_members: Map<(u256, u32), ContractAddress>,
         total_users: u256,
+        user_joined_groups: Map<
+            (ContractAddress, u256), u32,
+        >, // to help us track the user joined groups
+        group_next_member_index: Map<
+            u256, u32,
+        > // to help us track the next member index for each group
     }
 
     #[event]
@@ -81,6 +87,7 @@ pub mod SaveCircle {
         UserRegistered: UserRegistered,
         GroupCreated: GroupCreated,
         UsersInvited: UsersInvited,
+        UserJoinedGroup: UserJoinedGroup,
     }
 
     #[constructor]
@@ -162,7 +169,7 @@ pub mod SaveCircle {
 
         fn create_group(
             ref self: ContractState,
-            member_limit: u8,
+            member_limit: u32,
             contribution_amount: u256,
             lock_type: LockType,
             cycle_duration: u64,
@@ -233,7 +240,7 @@ pub mod SaveCircle {
 
         fn create_private_group(
             ref self: ContractState,
-            member_limit: u8,
+            member_limit: u32,
             contribution_amount: u256,
             cycle_duration: u64,
             cycle_unit: TimeUnit,
@@ -264,6 +271,9 @@ pub mod SaveCircle {
             };
 
             self.groups.write(group_id, group_info);
+
+            // Initialize member index counter for this group
+            self.group_next_member_index.write(group_id, 0);
 
             // spend invitations to all specified members
             assert!(invited_members.len() <= 1000, "Exceed max invite limit");
@@ -296,6 +306,113 @@ pub mod SaveCircle {
                 );
 
             group_id
+        }
+
+
+        fn join_group(ref self: ContractState, group_id: u256) -> u32 {
+            let caller = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // check if uers is registerd to platform
+            let user_profiles = self.user_profiles.read(caller);
+            assert!(user_profiles.is_registered, "Only registered use can join group");
+
+            // check if group exists
+            let mut group_info = self.groups.read(group_id);
+            assert!(group_info.group_id != 0, "Group does not exist");
+
+            // check if group is full
+            assert!(group_info.members < group_info.member_limit, "Group is full");
+
+            // check if user is a group member
+            let existing_member_index = self.user_joined_groups.read((caller, group_id));
+            assert!(existing_member_index != 0, "User is already a member");
+
+            // for private groups
+            if group_info.visibility == GroupVisibility::Private {
+                let invitation = self.group_invitations.read((group_id, caller));
+                assert!(invitation, "User is not invited to join group");
+            }
+
+            // lets get member index
+            let member_index = self.group_next_member_index.read(group_id);
+            assert!(member_index < group_info.member_limit, "Group is full");
+
+            // Create new member info
+            let group_member = GroupMember {
+                user: caller,
+                group_id,
+                locked_amount: 0, // Will be set based on lock requirements
+                joined_at: current_time,
+                member_index,
+                payout_cycle: 0, // Will be assigned based on payout order logic
+                has_been_paid: false,
+                contribution_count: 0,
+                late_contributions: 0,
+                missed_contributions: 0,
+            };
+
+            //lets store the member
+
+            self.group_members.write((group_id, member_index), group_member);
+
+            // lets track members with index
+            self.user_joined_groups.write((caller, group_id), member_index);
+
+            //lets update members count
+            group_info.members += 1;
+            self.groups.write(group_id, group_info);
+            self.group_next_member_index.write(group_id, member_index + 1);
+
+            // Remove invitation if it was a private group
+            if group_info.visibility == GroupVisibility::Private {
+                self.group_invitations.write((group_id, caller), false);
+            }
+
+            // Emit event
+            self
+                .emit(
+                    UserJoinedGroup {
+                        group_id, user: caller, member_index, joined_at: current_time,
+                    },
+                );
+
+            member_index
+        }
+
+
+        // Get member info by group and member index
+        fn get_group_member(
+            self: @ContractState, group_id: u256, member_index: u32,
+        ) -> GroupMember {
+            self.group_members.read((group_id, member_index))
+        }
+
+        // Get user's member index in a specific group
+        fn get_user_member_index(
+            self: @ContractState, user: ContractAddress, group_id: u256,
+        ) -> u32 {
+            self.user_joined_groups.read((user, group_id))
+        }
+
+        // Check if user is a member of a group
+        fn is_group_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
+            self._is_member(group_id, user)
+        }
+    }
+
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn _is_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
+            let member_index = self.user_joined_groups.read((user, group_id));
+            if member_index == 0 {
+                // Check if member at index 0 is actually this user
+                let member_at_zero = self.group_members.read((group_id, 0));
+                member_at_zero.user == user
+            } else {
+                true
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 use save_circle::enums::Enums::{GroupVisibility, LockType, TimeUnit};
-use save_circle::structs::Structs::{GroupInfo, UserProfile};
+use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -9,7 +9,7 @@ pub trait Isavecircle<TContractState> {
 
     fn create_group(
         ref self: TContractState,
-        member_limit: u8,
+        member_limit: u32,
         contribution_amount: u256,
         lock_type: LockType,
         cycle_duration: u64,
@@ -23,10 +23,17 @@ pub trait Isavecircle<TContractState> {
 
     fn create_private_group(
         ref self: TContractState,
-        member_limit: u8,
+        member_limit: u32,
         contribution_amount: u256,
         cycle_duration: u64,
         cycle_unit: TimeUnit,
         invited_members: Array<ContractAddress>,
     ) -> u256;
+
+
+    fn join_group(ref self: TContractState, group_id: u256) -> u32;
+
+    fn get_group_member(self: @TContractState, group_id: u256, member_index: u32) -> GroupMember;
+    fn get_user_member_index(self: @TContractState, user: ContractAddress, group_id: u256) -> u32;
+    fn is_group_member(self: @TContractState, group_id: u256, user: ContractAddress) -> bool;
 }
