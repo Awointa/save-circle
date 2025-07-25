@@ -257,8 +257,8 @@ pub mod SaveCircle {
             let current_time = get_block_timestamp();
 
             // 🔒 Validate lock_type if lock is required
-            if requires_lock {
-                assert!(lock_type != LockType::None, "Lock type required when locking is enabled");
+            if !requires_lock {
+                assert!(lock_type == LockType::None, "Lock type required when locking is enabled");
             }
 
             // create private group with no lock requirements and trust-based
