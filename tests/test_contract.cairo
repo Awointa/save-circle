@@ -200,9 +200,7 @@ fn test_create_private_group_success() {
     let now = get_block_timestamp();
     // create group
     dispatcher
-        .create_private_group(
-            1, 200, 1, TimeUnit::Days, invited_members, false, LockType::None, 0,
-        );
+        .create_private_group(1, 200, 1, TimeUnit::Days, invited_members, false, LockType::None, 0);
 
     let created_group = dispatcher.get_group_info(1);
 
