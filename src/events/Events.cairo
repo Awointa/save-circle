@@ -34,3 +34,10 @@ pub struct UserJoinedGroup {
     pub joined_at: u64,
 }
 
+#[derive(Drop, starknet::Event)]
+pub struct FundsWithdrawn {
+    pub group_id: u256,
+    pub user: ContractAddress,
+    pub amount: u256,
+}
+

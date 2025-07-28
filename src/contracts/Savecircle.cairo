@@ -13,7 +13,9 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-    use save_circle::events::Events::{GroupCreated, UserJoinedGroup, UserRegistered, UsersInvited};
+    use save_circle::events::Events::{
+        FundsWithdrawn, GroupCreated, UserJoinedGroup, UserRegistered, UsersInvited,
+    };
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
     use starknet::event::EventEmitter;
@@ -94,6 +96,7 @@ pub mod SaveCircle {
         GroupCreated: GroupCreated,
         UsersInvited: UsersInvited,
         UserJoinedGroup: UserJoinedGroup,
+        FundsWithdrawn: FundsWithdrawn,
     }
 
     #[constructor]
@@ -481,6 +484,97 @@ pub mod SaveCircle {
         fn get_locked_balance(self: @ContractState, user: ContractAddress) -> u256 {
             self.locked_balance.read(user)
         }
+
+
+        fn withdraw_locked(ref self: ContractState, group_id: u256) -> u256 {
+            let caller = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Check if contract is paused
+            self.pausable.assert_not_paused();
+
+            // Verify user is a member of this group
+            assert(self._is_member(group_id, caller), 'User not member of this group');
+
+            // Get group information
+            let group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+
+            // Calculate cycle end time
+            let cycle_duration_seconds = match group_info.cycle_unit {
+                TimeUnit::Days => group_info.cycle_duration * 86400, // 24 * 60 * 60
+                TimeUnit::Weeks => group_info.cycle_duration * 604800, // 7 * 24 * 60 * 60
+                TimeUnit::Months => group_info.cycle_duration
+                    * 2592000 // 30 * 24 * 60 * 60 (approximate)
+            };
+            let cycle_end_time = group_info.start_time + cycle_duration_seconds;
+
+            // Ensure cycle has ended
+            assert(current_time >= cycle_end_time, 'Group cycle has not ended yet');
+
+            // Ensure group is in Completed state (all payouts distributed)
+            assert(group_info.state == GroupState::Completed, 'Group cycle must be completed');
+
+            // Get user's member information
+            let member_index = self.user_joined_groups.read((caller, group_id));
+            let mut group_member = self.group_members.read((group_id, member_index));
+
+            // Check if user has locked funds to withdraw
+            assert(group_member.locked_amount > 0, 'No locked funds to withdraw');
+
+            // Check if user has already withdrawn (prevent double withdrawal)
+            assert(!group_member.has_been_paid, 'Funds  already been withdrawn');
+
+            // Calculate withdrawable amount (could include penalties for missed contributions)
+            let withdrawable_amount = if self._has_completed_circle(caller, group_id) {
+                // User completed all contributions - full withdrawal
+                group_member.locked_amount
+            } else {
+                // User missed contributions - apply penalty
+                let penalty = self._get_penalty_amount(caller, group_id);
+                assert(group_member.locked_amount >= penalty, 'Penalty exceeds locked amount');
+                group_member.locked_amount - penalty
+            };
+
+            // Transfer tokens back to user
+            let payment_token = IERC20Dispatcher {
+                contract_address: self.payment_token_address.read(),
+            };
+            let success = payment_token.transfer(caller, withdrawable_amount);
+            assert(success, 'Token transfer failed');
+
+            // Update user's locked balance
+            let current_locked = self.locked_balance.read(caller);
+            self.locked_balance.write(caller, current_locked - group_member.locked_amount);
+
+            // Update user profile
+            let mut user_profile = self.user_profiles.read(caller);
+            user_profile.total_lock_amount -= group_member.locked_amount;
+            self.user_profiles.write(caller, user_profile);
+
+            // Update group member - mark as withdrawn
+            group_member.locked_amount = 0;
+            group_member.has_been_paid = true;
+            self.group_members.write((group_id, member_index), group_member);
+
+            // Update group lock storage
+            self.group_lock.write((group_id, caller), 0);
+
+            // Emit withdrawal event (if event exists)
+            self.emit(FundsWithdrawn { group_id, user: caller, amount: withdrawable_amount });
+
+            withdrawable_amount
+        }
+
+        fn get_penalty_locked(self: @ContractState, user: ContractAddress, group_id: u256) -> u256 {
+            self._get_penalty_amount(user, group_id)
+        }
+
+        fn has_completed_circle(
+            self: @ContractState, user: ContractAddress, group_id: u256,
+        ) -> bool {
+            self._has_completed_circle(user, group_id)
+        }
     }
 
 
@@ -494,6 +588,41 @@ pub mod SaveCircle {
                 member_at_zero.user == user
             } else {
                 true
+            }
+        }
+
+
+        fn _has_completed_circle(
+            self: @ContractState, user: ContractAddress, group_id: u256,
+        ) -> bool {
+            let member_index = self.user_joined_groups.read((user, group_id));
+            let group_member = self.group_members.read((group_id, member_index));
+            let group_info = self.groups.read(group_id);
+
+            group_member.missed_contributions == 0
+        }
+
+        fn _get_penalty_amount(
+            self: @ContractState, user: ContractAddress, group_id: u256,
+        ) -> u256 {
+            let member_index = self.user_joined_groups.read((user, group_id));
+            let group_member = self.group_members.read((group_id, member_index));
+            let group_info = self.groups.read(group_id);
+
+            // Calculate penalty based on missed contributions
+            // Penalty = missed_contributions * contribution_amount * penalty_rate
+            // For simplicity, let's use a 10% penalty per missed contribution
+            let penalty_rate = 10; // 10% penalty per missed contribution
+            let base_penalty = group_member.missed_contributions.into()
+                * group_info.contribution_amount;
+            let total_penalty = (base_penalty * penalty_rate.into()) / 100_u256;
+
+            // Ensure penalty doesn't exceed locked amount
+            let max_penalty = group_member.locked_amount;
+            if total_penalty > max_penalty {
+                max_penalty
+            } else {
+                total_penalty
             }
         }
     }

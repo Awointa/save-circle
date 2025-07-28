@@ -376,7 +376,7 @@ fn test_join_group() {
     let now = get_block_timestamp();
     dispatcher
         .create_public_group(
-            1, 100, LockType::Progressive, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
+            1, 100, LockType::None, 1, TimeUnit::Days, GroupVisibility::Public, false, 0,
         );
 
     let created_group = dispatcher.get_group_info(1);
