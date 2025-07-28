@@ -560,7 +560,6 @@ pub mod SaveCircle {
             // Update group lock storage
             self.group_lock.write((group_id, caller), 0);
 
-            // Emit withdrawal event (if event exists)
             self.emit(FundsWithdrawn { group_id, user: caller, amount: withdrawable_amount });
 
             withdrawable_amount

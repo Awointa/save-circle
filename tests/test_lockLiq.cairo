@@ -196,14 +196,10 @@ fn test_lock_liquidity_insufficient_balance() {
     // Try to lock more than available
     start_cheat_caller_address(contract_address, user);
 
-    // This should fail due to insufficient balance
-    // Note: In Cairo, we can't easily test for panics, so we'll test the success case
-    // and verify the error condition is properly checked
+ 
     let user_balance = token_dispatcher.balance_of(user);
     assert(user_balance == 100, 'User should have 100 tokens');
 
-    // Try to lock 200 tokens (more than available) - this will panic
-    // For testing purposes, we'll just verify the balance check works
 
     stop_cheat_caller_address(contract_address);
 }
