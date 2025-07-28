@@ -244,7 +244,7 @@ fn test_create_private_group_with_lock() {
     // create group
     dispatcher
         .create_private_group(
-            1, 200, 1, TimeUnit::Days, invited_members, true, LockType::Upfront, 0,
+            1, 200, 1, TimeUnit::Days, invited_members, true, LockType::Progressive, 0,
         );
 
     let created_group = dispatcher.get_group_info(1);
@@ -253,7 +253,7 @@ fn test_create_private_group_with_lock() {
     assert!(created_group.creator == user, "creator mismatch");
     assert!(created_group.member_limit == 1, "member_limit mismatch");
     assert!(created_group.contribution_amount == 200, "contribution_amount mismatch");
-    assert!(created_group.lock_type == LockType::Upfront, "lock_type mismatch");
+    assert!(created_group.lock_type == LockType::Progressive, "lock_type mismatch");
     assert!(created_group.cycle_duration == 1, "cycle_duration mismatch");
     assert!(created_group.cycle_unit == TimeUnit::Days, "cycle_unit mismatch");
     assert!(created_group.members == 0, "members mismatch");

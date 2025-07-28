@@ -21,7 +21,9 @@ pub mod SaveCircle {
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
-    use starknet::{ClassHash, ContractAddress, get_block_timestamp, get_caller_address};
+    use starknet::{
+        ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
+    };
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
@@ -69,7 +71,11 @@ pub mod SaveCircle {
         >, // to help us track the user joined groups
         group_next_member_index: Map<
             u256, u32,
-        > // to help us track the next member index for each group
+        >, // to help us track the next member index for each group
+        group_lock: Map<
+            (u256, ContractAddress), u256,
+        >, // to track group lock amount per user per group
+        locked_balance: Map<ContractAddress, u256> // to track locked funds per user
     }
 
     #[event]
@@ -346,6 +352,23 @@ pub mod SaveCircle {
                 assert!(invitation, "User is not invited to join group");
             }
 
+            // Calculate required lock amount based on lock type
+            let lock_amount = match group_info.lock_type {
+                LockType::Progressive => {
+                    // Lock first contribution amount, rest will be locked progressively
+                    group_info.contribution_amount
+                },
+                LockType::None => {
+                    // No upfront locking required
+                    0_u256
+                },
+            };
+
+            // Lock funds if required
+            if group_info.requires_lock && lock_amount > 0 {
+                self.lock_liquidity(caller, lock_amount, group_id);
+            }
+
             // lets get member index
             let member_index = self.group_next_member_index.read(group_id);
             assert!(member_index <= group_info.member_limit, "Group is full");
@@ -353,7 +376,7 @@ pub mod SaveCircle {
             let group_member = GroupMember {
                 user: caller,
                 group_id,
-                locked_amount: 0,
+                locked_amount: lock_amount,
                 joined_at: current_time,
                 member_index,
                 payout_cycle: 0,
@@ -404,6 +427,59 @@ pub mod SaveCircle {
 
         fn is_group_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
             self._is_member(group_id, user)
+        }
+
+
+        fn lock_liquidity(
+            ref self: ContractState, token_address: ContractAddress, amount: u256, group_id: u256,
+        ) -> bool {
+            let caller = get_caller_address();
+
+            // Check if contract is paused
+            self.pausable.assert_not_paused();
+
+            // validate inputs
+            assert(amount > 0, 'Amount must be greater than 0');
+            assert(group_id != 0, 'Group ID must be greater than 0');
+
+            // check if group exists and is active
+            let group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(
+                group_info.state == GroupState::Active || group_info.state == GroupState::Created,
+                'Group must be Active or Created',
+            );
+
+            // check if user has enough balance - this should check token balance, not locked
+            // balance
+            let token = IERC20Dispatcher { contract_address: token_address };
+            let user_token_balance = token.balance_of(caller);
+            assert(user_token_balance >= amount, 'Insufficient token balance');
+
+            // transfer tokens from user to this contract
+
+            let success = token.transfer_from(caller, get_contract_address(), amount);
+            assert(success, 'Token transfer failed');
+
+            // update the group lock storage using correct tuple access
+            let current_group_lock = self.group_lock.read((group_id, caller));
+            let new_group_lock = current_group_lock + amount;
+            self.group_lock.write((group_id, caller), new_group_lock);
+
+            // update user's total locked balance
+            let current_locked = self.locked_balance.read(caller);
+            self.locked_balance.write(caller, current_locked + amount);
+
+            // Update user's total lock amount in profile
+            let mut user_profile = self.user_profiles.read(caller);
+            user_profile.total_lock_amount += amount;
+            self.user_profiles.write(caller, user_profile);
+
+            true
+        }
+
+        fn get_locked_balance(self: @ContractState, user: ContractAddress) -> u256 {
+            self.locked_balance.read(user)
         }
     }
 

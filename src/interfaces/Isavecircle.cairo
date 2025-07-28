@@ -39,4 +39,9 @@ pub trait Isavecircle<TContractState> {
     fn get_group_member(self: @TContractState, group_id: u256, member_index: u32) -> GroupMember;
     fn get_user_member_index(self: @TContractState, user: ContractAddress, group_id: u256) -> u32;
     fn is_group_member(self: @TContractState, group_id: u256, user: ContractAddress) -> bool;
+
+    fn lock_liquidity(
+        ref self: TContractState, token_address: ContractAddress, amount: u256, group_id: u256,
+    ) -> bool;
+    fn get_locked_balance(self: @TContractState, user: ContractAddress) -> u256;
 }
