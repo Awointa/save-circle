@@ -196,10 +196,8 @@ fn test_lock_liquidity_insufficient_balance() {
     // Try to lock more than available
     start_cheat_caller_address(contract_address, user);
 
- 
     let user_balance = token_dispatcher.balance_of(user);
     assert(user_balance == 100, 'User should have 100 tokens');
-
 
     stop_cheat_caller_address(contract_address);
 }
