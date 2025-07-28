@@ -2,8 +2,6 @@
 #[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
 pub enum LockType {
     Progressive,
-    Upfront,
-    Hybrid,
     None,
 }
 
