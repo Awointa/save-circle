@@ -117,6 +117,7 @@ pub mod SaveCircle {
 
         self.payment_token_address.write(token_address);
         self.next_group_id.write(1);
+        self.insurance_rate.write(100);
     }
 
     #[generate_trait]
@@ -372,11 +373,6 @@ pub mod SaveCircle {
                     0_u256
                 },
             };
-
-            // Lock funds if required
-            if group_info.requires_lock && lock_amount > 0 {
-                self.lock_liquidity(caller, lock_amount, group_id);
-            }
 
             // lets get member index
             let member_index = self.group_next_member_index.read(group_id);
@@ -652,6 +648,30 @@ pub mod SaveCircle {
         /// Get protocol treasury balance
         fn get_protocol_treasury(self: @ContractState) -> u256 {
             self.protocol_treasury.read()
+        }
+
+
+        fn activate_group(ref self: ContractState, group_id: u256) -> bool {
+            let caller = get_caller_address();
+
+            // Check if contract is paused
+            self.pausable.assert_not_paused();
+
+            // Get group information
+            let mut group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+
+            // Only group creator can activate the group
+            assert(group_info.creator == caller, 'Only creator can activate group');
+
+            // Group must be in Created state to be activated
+            assert(group_info.state == GroupState::Created, 'Group must be in Created state');
+
+            // Update group state to Active
+            group_info.state = GroupState::Active;
+            self.groups.write(group_id, group_info);
+
+            true
         }
     }
 

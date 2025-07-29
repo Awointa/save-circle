@@ -13,11 +13,11 @@ pub struct UserProfile {
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct joined_group {
-    group_id: u256,
-    user_address: ContractAddress,
-    joined_at: u64,
-    contribution_amount: u256,
-    member_index: u32,
+    pub group_id: u256,
+    pub user_address: ContractAddress,
+    pub joined_at: u64,
+    pub contribution_amount: u256,
+    pub member_index: u32,
 }
 
 #[derive(Drop, Copy, Serde, starknet::Store)]
