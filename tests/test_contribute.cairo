@@ -377,8 +377,6 @@ fn test_contribute_insurance_pool_update() {
 }
 
 
-
-
 #[test]
 fn test_contribute_three_members_with_insurance_fee() {
     let (contract_address, owner, token_address) = setup();
@@ -462,7 +460,7 @@ fn test_contribute_three_members_with_insurance_fee() {
     let expected_total_collected = total_payment * 3;
     assert(
         final_contract_balance == initial_contract_balance + expected_total_collected,
-        'Total insurance fees incorrect'
+        'Total insurance fees incorrect',
     );
 
     // Verify individual user balances
@@ -484,7 +482,7 @@ fn test_contribute_two_groups_multiple_members() {
     // Users for group 1
     let group1_user1: ContractAddress = contract_address_const::<2>();
     let group1_user2: ContractAddress = contract_address_const::<3>();
-    
+
     // Users for group 2
     let group2_user1: ContractAddress = contract_address_const::<4>();
     let group2_user2: ContractAddress = contract_address_const::<5>();
@@ -506,17 +504,18 @@ fn test_contribute_two_groups_multiple_members() {
     // Setup Group 2 (first user creates and joins)
     start_cheat_caller_address(contract_address, group2_user1);
     dispatcher.register_user('Group2User1'.into(), 'avatar_g2u1.png'.into());
-    
-    let group2_id = dispatcher.create_public_group(
-        5, // member_limit
-        contribution_amount, // contribution_amount  
-        LockType::None, // lock_type
-        4, // cycle_duration
-        TimeUnit::Weeks, // cycle_unit
-        GroupVisibility::Public, // visibility
-        false, // requires_lock
-        0 // min_reputation_score
-    );
+
+    let group2_id = dispatcher
+        .create_public_group(
+            5, // member_limit
+            contribution_amount, // contribution_amount  
+            LockType::None, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            GroupVisibility::Public, // visibility
+            false, // requires_lock
+            0 // min_reputation_score
+        );
 
     dispatcher.activate_group(group2_id);
     dispatcher.join_group(group2_id);
