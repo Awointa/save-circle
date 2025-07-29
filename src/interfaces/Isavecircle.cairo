@@ -52,4 +52,5 @@ pub trait Isavecircle<TContractState> {
 
     fn get_insurance_pool_balance(self: @TContractState, group_id: u256) -> u256;
     fn get_protocol_treasury(self: @TContractState) -> u256;
+    fn activate_group(ref self: TContractState, group_id: u256) -> bool;
 }
