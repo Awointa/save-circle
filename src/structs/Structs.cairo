@@ -41,7 +41,7 @@ pub struct GroupInfo {
     pub invited_members: u32,
 }
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, Copy, starknet::Store)]
 pub struct GroupMember {
     pub user: ContractAddress,
     pub group_id: u256,

@@ -14,8 +14,8 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
     use save_circle::events::Events::{
-        ContributionMade, FundsWithdrawn, GroupCreated, UserJoinedGroup, UserRegistered,
-        UsersInvited,
+        ContributionMade, FundsWithdrawn, GroupCreated, PayoutDistributed, UserJoinedGroup,
+        UserRegistered, UsersInvited,
     };
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
@@ -25,7 +25,8 @@ pub mod SaveCircle {
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
     use starknet::{
-        ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
+        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address,
+        get_contract_address,
     };
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
@@ -103,6 +104,7 @@ pub mod SaveCircle {
         UserJoinedGroup: UserJoinedGroup,
         FundsWithdrawn: FundsWithdrawn,
         ContributionMade: ContributionMade,
+        PayoutDistributed: PayoutDistributed,
     }
 
     #[constructor]
@@ -673,6 +675,143 @@ pub mod SaveCircle {
 
             true
         }
+
+
+        /// Distribute payout to the next eligible member based on priority
+        /// Priority: 1) Highest locked amount, 2) Earliest join time (tiebreaker)
+        fn distribute_payout(ref self: ContractState, group_id: u256) -> bool {
+            let caller = get_caller_address();
+
+            // Check if contract is paused
+            self.pausable.assert_not_paused();
+
+            // Get group information
+            let mut group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.state == GroupState::Active, 'Group must be active');
+
+            // Only group creator or admin can distribute payouts
+            assert(
+                group_info.creator == caller
+                    || self.accesscontrol.has_role(DEFAULT_ADMIN_ROLE, caller),
+                'Only creator  can distribute',
+            );
+
+            // Check if there are contributions to distribute
+            let total_contributions = self._calculate_total_contributions(group_id);
+            assert(total_contributions > 0, 'No contributions to distribute');
+
+            // Find next eligible member for payout
+            let next_recipient = self._get_next_payout_recipient(group_id);
+            assert(
+                next_recipient.user != contract_address_const::<0>(), 'No eligible recipient found',
+            );
+
+            // Calculate payout amount (total contributions minus insurance fees already deducted)
+            let payout_amount = total_contributions;
+
+            // Transfer payout to recipient
+            let payment_token = IERC20Dispatcher {
+                contract_address: self.payment_token_address.read(),
+            };
+            let success = payment_token.transfer(next_recipient.user, payout_amount);
+            assert(success, 'Payout transfer failed');
+
+            // Update recipient's payout status
+            let mut updated_member = next_recipient;
+            updated_member.has_been_paid = true;
+            updated_member.payout_cycle = group_info.current_cycle.try_into().unwrap() + 1;
+            self.group_members.write((group_id, updated_member.member_index), updated_member);
+
+            // Update group cycle information
+            group_info.current_cycle += 1;
+            group_info.payout_order += 1;
+
+            // Check if all members have been paid (cycle complete)
+            if group_info.payout_order >= group_info.members {
+                group_info.state = GroupState::Completed;
+            }
+
+            self.groups.write(group_id, group_info);
+
+            // Emit payout event
+            self
+                .emit(
+                    PayoutDistributed {
+                        group_id,
+                        recipient: next_recipient.user,
+                        amount: payout_amount,
+                        cycle: group_info.current_cycle,
+                    },
+                );
+
+            true
+        }
+
+        /// Get the next member who should receive payout based on priority
+        fn get_next_payout_recipient(self: @ContractState, group_id: u256) -> GroupMember {
+            self._get_next_payout_recipient(group_id)
+        }
+
+        /// Get payout order for all members in a group (simplified version)
+        fn get_payout_order(self: @ContractState, group_id: u256) -> Array<ContractAddress> {
+            let group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+
+            let mut payout_order = array![];
+
+            // Simple approach: find members in priority order one by one
+            let mut remaining_members = group_info.members;
+            let mut processed = array![];
+
+            while remaining_members > 0 {
+                let mut best_member = GroupMember {
+                    user: contract_address_const::<0>(),
+                    group_id: 0,
+                    locked_amount: 0,
+                    joined_at: 0,
+                    member_index: 0,
+                    payout_cycle: 0,
+                    has_been_paid: false,
+                    contribution_count: 0,
+                    late_contributions: 0,
+                    missed_contributions: 0,
+                };
+                let mut found = false;
+
+                let mut i = 0;
+                while i < group_info.members {
+                    let member = self.group_members.read((group_id, i));
+                    if member.user != contract_address_const::<0>()
+                        && !self._is_processed(@processed, member.member_index) {
+                        if !found {
+                            best_member = member;
+                            found = true;
+                        } else {
+                            // Compare priority: higher locked amount wins, then earlier join time
+                            if member.locked_amount > best_member.locked_amount {
+                                best_member = member;
+                            } else if member.locked_amount == best_member.locked_amount {
+                                if member.joined_at < best_member.joined_at {
+                                    best_member = member;
+                                }
+                            }
+                        }
+                    }
+                    i += 1;
+                }
+
+                if found {
+                    payout_order.append(best_member.user);
+                    processed.append(best_member.member_index);
+                    remaining_members -= 1;
+                } else {
+                    break;
+                }
+            }
+
+            payout_order
+        }
     }
 
 
@@ -722,6 +861,138 @@ pub mod SaveCircle {
             } else {
                 total_penalty
             }
+        }
+
+
+        fn _get_next_payout_recipient(self: @ContractState, group_id: u256) -> GroupMember {
+            let group_info = self.groups.read(group_id);
+            let mut best_member = GroupMember {
+                user: contract_address_const::<0>(),
+                group_id: 0,
+                locked_amount: 0,
+                joined_at: 0,
+                member_index: 0,
+                payout_cycle: 0,
+                has_been_paid: false,
+                contribution_count: 0,
+                late_contributions: 0,
+                missed_contributions: 0,
+            };
+            let mut found_eligible = false;
+
+            let mut i = 0;
+            while i < group_info.members {
+                let member = self.group_members.read((group_id, i));
+                if member.user != contract_address_const::<0>() && !member.has_been_paid {
+                    if !found_eligible {
+                        best_member = member;
+                        found_eligible = true;
+                    } else {
+                        // Compare priority: higher locked amount wins, then earlier join time
+                        if member.locked_amount > best_member.locked_amount {
+                            best_member = member;
+                        } else if member.locked_amount == best_member.locked_amount {
+                            if member.joined_at < best_member.joined_at {
+                                best_member = member;
+                            }
+                        }
+                    }
+                }
+                i += 1;
+            }
+
+            assert(found_eligible, 'No eligible member found');
+            best_member
+        }
+
+        fn _sort_members_by_priority(
+            self: @ContractState, mut members: Array<GroupMember>,
+        ) -> Array<GroupMember> {
+            let len = members.len();
+            if len <= 1 {
+                return members;
+            }
+
+            // Simple bubble sort implementation for Cairo arrays
+            let mut i = 0;
+            while i < len {
+                let mut j = 0;
+                while j < len - 1 - i {
+                    let member_j = *members.at(j);
+                    let member_j_plus_1 = *members.at(j + 1);
+
+                    // Compare: higher locked amount first, then earlier join time
+                    let should_swap = if member_j.locked_amount < member_j_plus_1.locked_amount {
+                        true
+                    } else if member_j.locked_amount == member_j_plus_1.locked_amount {
+                        member_j.joined_at > member_j_plus_1.joined_at
+                    } else {
+                        false
+                    };
+
+                    if should_swap {
+                        // Swap elements by creating new array
+                        let mut new_members = array![];
+                        let mut k = 0;
+                        while k < len {
+                            if k == j {
+                                new_members.append(member_j_plus_1);
+                            } else if k == j + 1 {
+                                new_members.append(member_j);
+                            } else {
+                                new_members.append(*members.at(k));
+                            }
+                            k += 1;
+                        }
+                        members = new_members;
+                    }
+                    j += 1;
+                }
+                i += 1;
+            }
+
+            members
+        }
+
+
+        fn _calculate_total_contributions(self: @ContractState, group_id: u256) -> u256 {
+            let group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+
+            let mut total_contributions = 0_u256;
+            let mut member_index = 0_u32;
+
+            // Iterate through all members in the group
+            loop {
+                if member_index >= group_info.members {
+                    break;
+                }
+
+                let group_member = self.group_members.read((group_id, member_index));
+
+                // Calculate this member's total contributions
+                // contribution_count * contribution_amount per cycle
+                let member_contributions = group_member.contribution_count.into()
+                    * group_info.contribution_amount;
+                total_contributions += member_contributions;
+
+                member_index += 1;
+            }
+
+            total_contributions
+        }
+
+
+        fn _is_processed(self: @ContractState, processed: @Array<u32>, member_index: u32) -> bool {
+            let mut i = 0;
+            let len = processed.len();
+            while i < len {
+                if *processed.at(i) == member_index {
+                    return true;
+                }
+                i += 1;
+            }
+            false
         }
     }
 }
