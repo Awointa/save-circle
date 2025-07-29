@@ -14,7 +14,8 @@ pub mod SaveCircle {
     use openzeppelin::upgrades::interface::IUpgradeable;
     use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
     use save_circle::events::Events::{
-        FundsWithdrawn, GroupCreated, UserJoinedGroup, UserRegistered, UsersInvited,
+        ContributionMade, FundsWithdrawn, GroupCreated, UserJoinedGroup, UserRegistered,
+        UsersInvited,
     };
     use save_circle::interfaces::Isavecircle::Isavecircle;
     use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
@@ -77,7 +78,11 @@ pub mod SaveCircle {
         group_lock: Map<
             (u256, ContractAddress), u256,
         >, // to track group lock amount per user per group
-        locked_balance: Map<ContractAddress, u256> // to track locked funds per user
+        locked_balance: Map<ContractAddress, u256>, // to track locked funds per user
+        insurance_pool: Map<u256, u256>, // group_id -> pool_balance
+        protocol_treasury: u256, // Accumulated protocol fees
+        insurance_rate: u256, // 100 = 1%
+        protocol_fee_rate: u256,
     }
 
     #[event]
@@ -97,6 +102,7 @@ pub mod SaveCircle {
         UsersInvited: UsersInvited,
         UserJoinedGroup: UserJoinedGroup,
         FundsWithdrawn: FundsWithdrawn,
+        ContributionMade: ContributionMade,
     }
 
     #[constructor]
@@ -573,6 +579,79 @@ pub mod SaveCircle {
             self: @ContractState, user: ContractAddress, group_id: u256,
         ) -> bool {
             self._has_completed_circle(user, group_id)
+        }
+
+
+        fn contribute(ref self: ContractState, group_id: u256) -> bool {
+            let caller = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Check if contract is paused
+            self.pausable.assert_not_paused();
+
+            // Verify user is a member of this group
+            assert(self._is_member(group_id, caller), 'User not member of this group');
+
+            // Get group information
+            let group_info = self.groups.read(group_id);
+            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.state == GroupState::Active, 'Group must be active');
+
+            // Get user's member information
+            let member_index = self.user_joined_groups.read((caller, group_id));
+            let mut group_member = self.group_members.read((group_id, member_index));
+
+            // Calculate total payment: contribution + 1% insurance fee
+            let contribution_amount = group_info.contribution_amount;
+            let insurance_rate = self.insurance_rate.read();
+            let insurance_fee = (contribution_amount * insurance_rate)
+                / 10000; // 1% = 100 basis points
+            let total_payment = contribution_amount + insurance_fee;
+
+            // Check if user has enough token balance
+            let payment_token = IERC20Dispatcher {
+                contract_address: self.payment_token_address.read(),
+            };
+            let user_balance = payment_token.balance_of(caller);
+            assert(user_balance >= total_payment, 'Insufficient bal for contri');
+
+            // Transfer total payment from user to contract
+            let success = payment_token
+                .transfer_from(caller, get_contract_address(), total_payment);
+            assert(success, 'Contribution transfer failed');
+
+            // Add insurance fee to group's insurance pool
+            let current_pool = self.insurance_pool.read(group_id);
+            self.insurance_pool.write(group_id, current_pool + insurance_fee);
+
+            // Update member's contribution count
+            group_member.contribution_count += 1;
+            self.group_members.write((group_id, member_index), group_member);
+
+            // Emit contribution event
+            self
+                .emit(
+                    ContributionMade {
+                        group_id,
+                        user: caller,
+                        contribution_amount,
+                        insurance_fee,
+                        total_paid: total_payment,
+                    },
+                );
+
+            true
+        }
+
+
+        /// Get insurance pool balance for a specific group
+        fn get_insurance_pool_balance(self: @ContractState, group_id: u256) -> u256 {
+            self.insurance_pool.read(group_id)
+        }
+
+        /// Get protocol treasury balance
+        fn get_protocol_treasury(self: @ContractState) -> u256 {
+            self.protocol_treasury.read()
         }
     }
 

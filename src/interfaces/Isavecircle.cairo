@@ -48,4 +48,8 @@ pub trait Isavecircle<TContractState> {
     fn withdraw_locked(ref self: TContractState, group_id: u256) -> u256;
     fn get_penalty_locked(self: @TContractState, user: ContractAddress, group_id: u256) -> u256;
     fn has_completed_circle(self: @TContractState, user: ContractAddress, group_id: u256) -> bool;
+    fn contribute(ref self: TContractState, group_id: u256) -> bool;
+
+    fn get_insurance_pool_balance(self: @TContractState, group_id: u256) -> u256;
+    fn get_protocol_treasury(self: @TContractState) -> u256;
 }
