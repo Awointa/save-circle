@@ -1,7 +1,7 @@
 use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
 use starknet::ContractAddress;
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, Copy, starknet::Store)]
 pub struct UserProfile {
     pub user_address: ContractAddress,
     pub name: felt252,
@@ -11,7 +11,7 @@ pub struct UserProfile {
     pub profile_created_at: u64,
 }
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, Copy, starknet::Store)]
 pub struct joined_group {
     pub group_id: u256,
     pub user_address: ContractAddress,
@@ -41,7 +41,7 @@ pub struct GroupInfo {
     pub invited_members: u32,
 }
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, Copy, starknet::Store)]
 pub struct GroupMember {
     pub user: ContractAddress,
     pub group_id: u256,
