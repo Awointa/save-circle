@@ -170,14 +170,14 @@ pub mod SaveCircle {
 
     #[abi(embed_v0)]
     impl SavecircleImpl of Isavecircle<ContractState> {
-        fn register_user(ref self: ContractState, name: felt252, avatar: felt252) -> bool {
+        fn register_user(ref self: ContractState, name: ByteArray, avatar: ByteArray) -> bool {
             let caller = get_caller_address();
             let current_time = get_block_timestamp();
 
             let user_entry = self.user_profiles.entry(caller);
             let existing_profile = user_entry.read();
             assert!(!existing_profile.is_registered, "User already registered");
-            assert!(name != 0, "Name cannot be empty");
+            assert!(name != "", "Name cannot be empty");
 
             // Enhanced profile with additional fields from modified version
             let new_profile = UserProfile {
@@ -1193,7 +1193,7 @@ pub mod SaveCircle {
             ref self: ContractState,
             user: ContractAddress,
             activity_type: ActivityType,
-            description: felt252,
+            description: ByteArray,
             amount: u256,
             group_id: Option<u256>,
             is_positive: bool,

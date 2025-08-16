@@ -4,8 +4,8 @@ use starknet::ContractAddress;
 #[derive(Drop, Serde, Copy, starknet::Store)]
 pub struct UserProfile {
     pub user_address: ContractAddress,
-    pub name: felt252,
-    pub avatar: felt252,
+    pub name: ByteArray,
+    pub avatar: ByteArray,
     pub is_registered: bool,
     pub total_lock_amount: u256,
     pub profile_created_at: u64,
@@ -28,7 +28,7 @@ pub struct UserActivity {
     pub activity_id: u256,
     pub user_address: ContractAddress,
     pub activity_type: ActivityType,
-    pub description:  felt252,
+    pub description:  ByteArray,
     pub amount: u256,
     pub group_id: Option<u256>,
     pub timestamp: u64,

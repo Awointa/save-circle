@@ -50,17 +50,18 @@ fn test_lock_liquidity_basic_functionality() {
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     // Create a group with lock requirement
     let group_id = dispatcher
         .create_public_group(
+            "TestGroup", // name
+            "TestGroupDescription", // description,
             5, // member_limit
             1000, // contribution_amount  
             LockType::Progressive, // lock_type
             4, // cycle_duration
             TimeUnit::Weeks, // cycle_unit
-            GroupVisibility::Public, // visibility
             true, // requires_lock
             0 // min_reputation_score
         );
@@ -102,7 +103,7 @@ fn test_lock_liquidity_basic_functionality() {
     assert(final_locked_balance == lock_amount, 'Lock balance equal lock amount');
 
     // Check user profile was updated
-    let user_profile = dispatcher.get_user_profile(user);
+    let user_profile = dispatcher.get_user_profile_view_data(user);
     assert(user_profile.total_lock_amount == lock_amount, 'Profile show locked amount');
 
     stop_cheat_caller_address(contract_address);
@@ -119,11 +120,19 @@ fn test_lock_liquidity_multiple_locks() {
 
     // Register user and create group
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     let group_id = dispatcher
         .create_public_group(
-            5, 500, LockType::Progressive, 2, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
@@ -176,11 +185,19 @@ fn test_lock_liquidity_insufficient_balance() {
 
     // Register user and create group
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     let group_id = dispatcher
         .create_public_group(
-            5, 1000, LockType::Progressive, 4, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
@@ -214,15 +231,23 @@ fn test_get_locked_balance_multiple_users() {
 
     // Register users
     start_cheat_caller_address(contract_address, user1);
-    dispatcher.register_user('User1'.into(), 'avatar1.png'.into());
+    dispatcher.register_user("User1", "avatar1.png");
     let group_id = dispatcher
         .create_public_group(
-            5, 1000, LockType::Progressive, 4, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, user2);
-    dispatcher.register_user('User2'.into(), 'avatar2.png'.into());
+    dispatcher.register_user("User2", "avatar2.png");
     stop_cheat_caller_address(contract_address);
 
     // Setup tokens for both users
