@@ -35,6 +35,37 @@ pub struct UserJoinedGroup {
 }
 
 #[derive(Drop, starknet::Event)]
+pub struct FundsWithdrawn {
+    pub group_id: u256,
+    pub user: ContractAddress,
+    pub amount: u256,
+}
+
+
+#[derive(Drop, starknet::Event)]
+pub struct ProtocolFeeDistributed {
+    pub group_id: u256,
+    pub protocol_fee: u256,
+    pub member_refund: u256,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct ContributionMade {
+    pub group_id: u256,
+    pub user: ContractAddress,
+    pub contribution_amount: u256,
+    pub insurance_fee: u256,
+    pub total_paid: u256,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct PayoutDistributed {
+    pub group_id: u256,
+    pub recipient: ContractAddress,
+    pub amount: u256,
+    pub cycle: u64,
+}
+#[derive(Drop, starknet::Event)]
 pub struct ContributionMade {
     pub group_id: u256,
     pub user: ContractAddress,
