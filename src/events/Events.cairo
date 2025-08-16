@@ -65,14 +65,6 @@ pub struct PayoutDistributed {
     pub amount: u256,
     pub cycle: u64,
 }
-#[derive(Drop, starknet::Event)]
-pub struct ContributionMade {
-    pub group_id: u256,
-    pub user: ContractAddress,
-    pub amount: u256,
-    pub cycle_number: u64,
-    pub timestamp: u64,
-}
 
 #[derive(Drop, starknet::Event)]
 pub struct PayoutSent {

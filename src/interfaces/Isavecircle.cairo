@@ -1,5 +1,5 @@
-use save_circle::enums::Enums::{GroupVisibility, LockType, TimeUnit};
-use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, UserActivity, UserStatistics, UserGroupDetails, ProfileViewData};
+use save_circle::enums::Enums::{LockType, TimeUnit};
+use save_circle::structs::Structs::{GroupInfo, GroupMember, UserActivity, UserStatistics, UserGroupDetails, ProfileViewData};
 use starknet::ContractAddress;
 
 #[starknet::interface]
