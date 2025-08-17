@@ -12,21 +12,23 @@ pub mod SaveCircle {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
+    use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit, ActivityType};
     use save_circle::events::Events::{
-        ContributionMade, FundsWithdrawn, GroupCreated, PayoutDistributed, UserJoinedGroup,
+        ContributionMade, FundsWithdrawn, GroupCreated, PayoutDistributed, PayoutSent, UserJoinedGroup,
         UserRegistered, UsersInvited,
     };
     use save_circle::interfaces::Isavecircle::Isavecircle;
-    use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
+    use save_circle::structs::Structs::{
+        GroupInfo, GroupMember, UserProfile, UserActivity, UserStatistics, 
+        ProfileViewData, UserGroupDetails, PayoutRecord, joined_group
+    };
     use starknet::event::EventEmitter;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
     use starknet::{
-        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address,
-        get_contract_address,
+        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address, get_contract_address
     };
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
@@ -57,28 +59,42 @@ pub mod SaveCircle {
         src5: SRC5Component::Storage,
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
-        // payment token address
+        
+        // Core storage
         payment_token_address: ContractAddress,
-        //user profiles
         user_profiles: Map<ContractAddress, UserProfile>,
         groups: Map<u256, GroupInfo>,
-        joined_groups: Map<(ContractAddress, u64), joined_group>,
         group_members: Map<(u256, u32), GroupMember>,
         public_groups: Vec<u256>,
         group_invitations: Map<(u256, ContractAddress), bool>,
         next_group_id: u256,
+        total_users: u256,
+        
+        // Enhanced tracking for profile features (from modified version)
+        user_joined_groups: Map<(ContractAddress, u256), u32>, // (user, group_id) -> member_index
+        user_joined_groups_list: Map<(ContractAddress, u32), u256>, // (user, index) -> group_id
+        user_joined_groups_count: Map<ContractAddress, u32>,
+        group_next_member_index: Map<u256, u32>,
+        
+        // Activity tracking (from modified version)
+        user_activities: Map<(ContractAddress, u256), UserActivity>, // (user, activity_id) -> activity
+        user_activity_count: Map<ContractAddress, u256>,
+        next_activity_id: u256,
+        
+        // Statistics (from modified version)
+        user_statistics: Map<ContractAddress, UserStatistics>,
+        
+        // Payout tracking (from modified version)
+        payout_records: Map<u256, PayoutRecord>, // payout_id -> record
+        next_payout_id: u256,
+        group_payout_queue: Map<(u256, u32), ContractAddress>, // (group_id, position) -> user
+        group_exists: Map<u256, bool>,
+        
+        // Financial tracking from original (keeping all original financial features)
+        joined_groups: Map<(ContractAddress, u64), joined_group>,
         user_payout_index: Map<(u64, ContractAddress), u32>,
         group_invited_members: Map<(u256, u32), ContractAddress>,
-        total_users: u256,
-        user_joined_groups: Map<
-            (ContractAddress, u256), u32,
-        >, // to help us track the user joined groups
-        group_next_member_index: Map<
-            u256, u32,
-        >, // to help us track the next member index for each group
-        group_lock: Map<
-            (u256, ContractAddress), u256,
-        >, // to track group lock amount per user per group
+        group_lock: Map<(u256, ContractAddress), u256>, // to track group lock amount per user per group
         locked_balance: Map<ContractAddress, u256>, // to track locked funds per user
         insurance_pool: Map<u256, u256>, // group_id -> pool_balance
         protocol_treasury: u256, // Accumulated protocol fees
@@ -97,7 +113,8 @@ pub mod SaveCircle {
         SRC5Event: SRC5Component::Event,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
-        // Add Events after importing it above
+        
+        // All events from both versions
         UserRegistered: UserRegistered,
         GroupCreated: GroupCreated,
         UsersInvited: UsersInvited,
@@ -105,20 +122,24 @@ pub mod SaveCircle {
         FundsWithdrawn: FundsWithdrawn,
         ContributionMade: ContributionMade,
         PayoutDistributed: PayoutDistributed,
+        PayoutSent: PayoutSent,
     }
 
     #[constructor]
     fn constructor(
-        ref self: ContractState, default_admin: ContractAddress, token_address: ContractAddress,
+        ref self: ContractState, 
+        default_admin: ContractAddress, 
+        token_address: ContractAddress,
     ) {
         self.accesscontrol.initializer();
-
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, default_admin);
         self.accesscontrol._grant_role(PAUSER_ROLE, default_admin);
         self.accesscontrol._grant_role(UPGRADER_ROLE, default_admin);
-
+        
         self.payment_token_address.write(token_address);
         self.next_group_id.write(1);
+        self.next_activity_id.write(1);
+        self.next_payout_id.write(1);
         self.insurance_rate.write(100);
     }
 
@@ -138,10 +159,6 @@ pub mod SaveCircle {
         }
     }
 
-    //
-    // Upgradeable
-    //
-
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
@@ -150,49 +167,128 @@ pub mod SaveCircle {
         }
     }
 
-
     #[abi(embed_v0)]
     impl SavecircleImpl of Isavecircle<ContractState> {
-        fn register_user(ref self: ContractState, name: felt252, avatar: felt252) -> bool {
+        fn register_user(ref self: ContractState, name: ByteArray, avatar: ByteArray) -> bool {
             let caller = get_caller_address();
+            let current_time = get_block_timestamp();
 
             let user_entry = self.user_profiles.entry(caller);
             let existing_profile = user_entry.read();
-            assert(!existing_profile.is_registered, ' User already registered');
+            assert!(!existing_profile.is_registered, "User already registered");
+            assert!(name != "", "Name cannot be empty");
 
-            assert(name != 0, ' Name cannot be empty');
-
+            // Enhanced profile with additional fields from modified version
             let new_profile = UserProfile {
                 user_address: caller,
-                name,
-                avatar,
+                name: name.clone(),
+                avatar: avatar.clone(),
                 is_registered: true,
                 total_lock_amount: 0,
-                profile_created_at: starknet::get_block_timestamp(),
+                profile_created_at: current_time,
+                reputation_score: 0, // Starting reputation
+                total_contribution: 0,
+                total_joined_groups: 0,
+                total_created_groups: 0,
+                total_earned: 0,
+                completed_cycles: 0,
+                active_groups: 0,
+                on_time_payments: 0,
+                total_payments: 0,
+                average_contribution: 0,
+                payment_rate: 0,
             };
 
             user_entry.write(new_profile);
+            
+            // Initialize user statistics (from modified version)
+            let user_stats = UserStatistics {
+                user_address: caller,
+                total_saved: 0,
+                total_earned: 0,
+                success_rate: 100,
+                average_cycle_duration: 0,
+                favorite_contribution_amount: 0,
+                longest_active_streak: 0,
+                current_active_streak: 0,
+                groups_completed_successfully: 0,
+                groups_left_early: 0,
+                total_penalties_paid: 0,
+                updated_at: current_time,
+            };
+            self.user_statistics.write(caller, user_stats);
 
+            // Record registration activity (from modified version)
+            self._record_activity(
+                caller,
+                ActivityType::UserRegistered,
+                "User registered on SaveCircle",
+                0,
+                Option::None,
+                false
+            );
+
+            self.user_joined_groups_count.write(caller, 0);
+            self.user_activity_count.write(caller, 1);
             self.total_users.write(self.total_users.read() + 1);
 
             self.emit(UserRegistered { user: caller, name });
-
             true
         }
-
 
         fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
             self.user_profiles.entry(user_address).read()
         }
 
+
+
+        // Enhanced get_user_profile that returns comprehensive data (from modified version)
+        fn get_user_profile_view_data(self: @ContractState, user_address: ContractAddress) -> ProfileViewData {
+            let profile = self.user_profiles.read(user_address);
+            let statistics = self.user_statistics.read(user_address);
+            
+            // Get recent activities (last 10)
+            let activity_count = self.user_activity_count.read(user_address);
+            let mut recent_activities = ArrayTrait::new();
+            let start_index = if activity_count > 10 { activity_count - 10 } else { 0 };
+            
+            let mut i = start_index;
+            while i < activity_count {
+                let activity = self.user_activities.read((user_address, i));
+                recent_activities.append(activity);
+                i += 1;
+            };
+
+            // Get joined groups
+            let joined_groups_count = self.user_joined_groups_count.read(user_address);
+            let mut joined_groups = ArrayTrait::new();
+            
+            let mut i = 0;
+            while i < joined_groups_count {
+                let group_id = self.user_joined_groups_list.read((user_address, i));
+                let group_info = self.groups.read(group_id);
+                joined_groups.append(group_info);
+                i += 1;
+            };
+
+            ProfileViewData {
+                profile,
+                recent_activities,
+                joined_groups,
+                statistics,
+            }
+        }
+
+        
         fn create_public_group(
             ref self: ContractState,
+            name: ByteArray,
+            description: ByteArray,
             member_limit: u32,
             contribution_amount: u256,
             lock_type: LockType,
             cycle_duration: u64,
             cycle_unit: TimeUnit,
-            visibility: GroupVisibility,
             requires_lock: bool,
             min_reputation_score: u32,
         ) -> u256 {
@@ -201,14 +297,13 @@ pub mod SaveCircle {
             let current_time = get_block_timestamp();
 
             let user_entry = self.user_profiles.entry(caller);
-            let existing_profile = user_entry.read();
-            assert!(existing_profile.is_registered, "Only registered use can create group");
-
-            // calculate total cycles based on the member limit
-            let total_cycles = member_limit;
+            let mut existing_profile = user_entry.read();
+            assert!(existing_profile.is_registered, "Only registered users can create groups");
 
             let group_info = GroupInfo {
                 group_id,
+                group_name: name,
+                description,
                 creator: caller,
                 member_limit,
                 contribution_amount,
@@ -219,48 +314,58 @@ pub mod SaveCircle {
                 state: GroupState::Created,
                 current_cycle: 0,
                 payout_order: 0,
+                total_cycles: member_limit,
+                completed_cycles: 0,
                 start_time: current_time,
-                total_cycles,
-                visibility,
+                last_payout_time: 0,
+                visibility: GroupVisibility::Public,
                 requires_lock,
                 requires_reputation_score: min_reputation_score,
-                invited_members: 0,
+                total_pool_amount: 0,
+                remaining_pool_amount: 0,
+                next_payout_recipient: starknet::contract_address_const::<0>(),
+                is_active: true,
             };
 
             self.groups.write(group_id, group_info);
-
-            // Initialize member index counter for this group
             self.group_next_member_index.write(group_id, 0);
+            self.public_groups.push(group_id);
+            self.group_exists.write(group_id, true);
 
-            if visibility == GroupVisibility::Public {
-                self.public_groups.push(group_id)
-            }
+            // Update user profile
+            existing_profile.total_created_groups += 1;
+            user_entry.write(existing_profile);
+
+            // Record activity
+            self._record_activity(
+                caller,
+                ActivityType::GroupCreated,
+                "Created new public group",
+                0,
+                Option::Some(group_id),
+                false
+            );
 
             self.next_group_id.write(group_id + 1);
 
-            self
-                .emit(
-                    GroupCreated {
-                        group_id,
-                        creator: caller,
-                        member_limit,
-                        contribution_amount,
-                        cycle_duration,
-                        cycle_unit,
-                        visibility,
-                        requires_lock,
-                    },
-                );
+            self.emit(GroupCreated {
+                group_id,
+                creator: caller,
+                member_limit,
+                contribution_amount,
+                cycle_duration,
+                cycle_unit,
+                visibility: GroupVisibility::Public,
+                requires_lock,
+            });
 
             group_id
         }
 
-        fn get_group_info(self: @ContractState, group_id: u256) -> GroupInfo {
-            self.groups.read(group_id)
-        }
-
         fn create_private_group(
             ref self: ContractState,
+            name: ByteArray,
+            description: ByteArray,
             member_limit: u32,
             contribution_amount: u256,
             cycle_duration: u64,
@@ -274,14 +379,20 @@ pub mod SaveCircle {
             let group_id = self.next_group_id.read();
             let current_time = get_block_timestamp();
 
-            // 🔒 Validate lock_type if lock is required
+            let user_entry = self.user_profiles.entry(caller);
+            let mut existing_profile = user_entry.read();
+            assert!(existing_profile.is_registered, "Only registered users can create groups");
+
+            // Validate lock_type if lock is required
             if !requires_lock {
-                assert!(lock_type == LockType::None, "Lock type required when locking is enabled");
+                assert!(lock_type == LockType::None, "Lock type should be None when locking is disabled");
             }
 
-            // create private group with no lock requirements and trust-based
+            // Create private group
             let group_info = GroupInfo {
                 group_id,
+                group_name: name,
+                description,
                 creator: caller,
                 member_limit,
                 contribution_amount,
@@ -292,79 +403,97 @@ pub mod SaveCircle {
                 state: GroupState::Created,
                 current_cycle: 0,
                 payout_order: 0,
-                start_time: current_time,
                 total_cycles: member_limit,
+                completed_cycles: 0,
+                start_time: current_time,
+                last_payout_time: 0,
                 visibility: GroupVisibility::Private,
                 requires_lock,
                 requires_reputation_score: min_reputation_score,
-                invited_members: invited_members.len(),
+                total_pool_amount: 0,
+                remaining_pool_amount: 0,
+                next_payout_recipient: starknet::contract_address_const::<0>(),
+                is_active: true,
             };
 
             self.groups.write(group_id, group_info);
-
-            // Initialize member index counter for this group
             self.group_next_member_index.write(group_id, 0);
+            self.group_exists.write(group_id, true);
 
-            // spend invitations to all specified members
-            assert!(invited_members.len() <= 1000, "Exceed max invite limit");
+            // Send invitations to all specified members
+            assert!(invited_members.len() <= 1000, "Exceeded max invite limit");
             let mut i = 0;
             while i < invited_members.len() {
                 let invitee = invited_members[i];
                 self.group_invitations.write((group_id, *invitee), true);
                 i += 1;
-            }
+            };
 
-            self
-                .emit(
-                    UsersInvited { group_id, inviter: caller, invitees: invited_members.clone() },
-                );
+            // Update user profile
+            existing_profile.total_created_groups += 1;
+            user_entry.write(existing_profile);
+
+            // Record activity
+            self._record_activity(
+                caller,
+                ActivityType::GroupCreated,
+                "Created new private group",
+                0,
+                Option::Some(group_id),
+                false
+            );
+
+            self.emit(UsersInvited { 
+                group_id, 
+                inviter: caller, 
+                invitees: invited_members.clone() 
+            });
 
             self.next_group_id.write(group_id + 1);
 
-            self
-                .emit(
-                    GroupCreated {
-                        group_id,
-                        creator: caller,
-                        member_limit,
-                        contribution_amount,
-                        cycle_duration,
-                        cycle_unit,
-                        visibility: GroupVisibility::Private,
-                        requires_lock,
-                    },
-                );
+            self.emit(GroupCreated {
+                group_id,
+                creator: caller,
+                member_limit,
+                contribution_amount,
+                cycle_duration,
+                cycle_unit,
+                visibility: GroupVisibility::Private,
+                requires_lock,
+            });
 
             group_id
         }
-
 
         fn join_group(ref self: ContractState, group_id: u256) -> u32 {
             let caller = get_caller_address();
             let current_time = get_block_timestamp();
 
-            // check if uers is registerd to platform
-            let user_profiles = self.user_profiles.read(caller);
-            assert!(user_profiles.is_registered, "Only registered use can join group");
+            // Check if user is registered to platform
+            let user_entry = self.user_profiles.entry(caller);
+            let mut user_profile = user_entry.read();
+            assert!(user_profile.is_registered, "Only registered users can join groups");
 
-            // check if group exists
+            // Check if group exists using the dedicated boolean storage (from modified version)
+            let group_exists = self.group_exists.read(group_id);
+            assert!(group_exists, "Group does not exist");
+            
             let mut group_info = self.groups.read(group_id);
-            assert!(group_info.group_id != 0, "Group does not exist");
-
-            // check if group is full
             assert!(group_info.members < group_info.member_limit, "Group is full");
 
-            // check if user is a group member
+            // Check if user is already a group member
             let existing_member_index = self.user_joined_groups.read((caller, group_id));
-            assert!(existing_member_index == 0, "User is already a member");
+            // Enhanced check from modified version
+            let existing_member = self.group_members.read((group_id, existing_member_index));
+            assert!(existing_member.user != caller || !existing_member.is_active, "User is already a member");
 
-            // for private groups
+            // For private groups
             if group_info.visibility == GroupVisibility::Private {
                 let invitation = self.group_invitations.read((group_id, caller));
                 assert!(invitation, "User is not invited to join group");
             }
 
-            // Calculate required lock amount based on lock type
+            // Calculate required lock amount based on lock type (from original)
             let lock_amount = match group_info.lock_type {
                 LockType::Progressive => {
                     // Lock first contribution amount, rest will be locked progressively
@@ -376,10 +505,11 @@ pub mod SaveCircle {
                 },
             };
 
-            // lets get member index
+            // Get member index
             let member_index = self.group_next_member_index.read(group_id);
             assert!(member_index <= group_info.member_limit, "Group is full");
 
+            // Enhanced GroupMember struct (combining both versions)
             let group_member = GroupMember {
                 user: caller,
                 group_id,
@@ -391,65 +521,71 @@ pub mod SaveCircle {
                 contribution_count: 0,
                 late_contributions: 0,
                 missed_contributions: 0,
+                total_contributed: 0,
+                total_recieved: 0,
+                is_active: true
             };
 
             self.group_members.write((group_id, member_index), group_member);
-
             self.user_joined_groups.write((caller, group_id), member_index);
 
-            //lets update members count
+            // Add to user's joined groups list (from modified version)
+            let joined_count = self.user_joined_groups_count.read(caller);
+            self.user_joined_groups_list.write((caller, joined_count), group_id);
+            self.user_joined_groups_count.write(caller, joined_count + 1);
+
+            // Update members count
             group_info.members += 1;
-            self.groups.write(group_id, group_info);
+            self.groups.write(group_id, group_info.clone());
             self.group_next_member_index.write(group_id, member_index + 1);
+
+            // Update user profile (from modified version)
+            user_profile.total_joined_groups += 1;
+            user_profile.active_groups += 1;
+            user_entry.write(user_profile);
+
+            // Record activity (from modified version)
+            self._record_activity(
+                caller,
+                ActivityType::GroupJoined,
+                "Joined new group",
+                0,
+                Option::Some(group_id),
+                false
+            );
 
             // Remove invitation if it was a private group
             if group_info.visibility == GroupVisibility::Private {
                 self.group_invitations.write((group_id, caller), false);
             }
 
-            self
-                .emit(
-                    UserJoinedGroup {
-                        group_id, user: caller, member_index, joined_at: current_time,
-                    },
-                );
+            self.emit(UserJoinedGroup {
+                group_id, 
+                user: caller, 
+                member_index, 
+                joined_at: current_time,
+            });
 
             member_index
         }
 
-
-        fn get_group_member(
-            self: @ContractState, group_id: u256, member_index: u32,
-        ) -> GroupMember {
-            self.group_members.read((group_id, member_index))
-        }
-
-
-        fn get_user_member_index(
-            self: @ContractState, user: ContractAddress, group_id: u256,
-        ) -> u32 {
-            self.user_joined_groups.read((user, group_id))
-        }
-
-
-        fn is_group_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
-            self._is_member(group_id, user)
-        }
-
-
+        // Keep all original financial functions (lock_liquidity, withdraw_locked, contribute, etc.)
         fn lock_liquidity(
-            ref self: ContractState, token_address: ContractAddress, amount: u256, group_id: u256,
+            ref self: ContractState, 
+            token_address: ContractAddress, 
+            amount: u256, 
+            group_id: u256,
         ) -> bool {
             let caller = get_caller_address();
 
             // Check if contract is paused
             self.pausable.assert_not_paused();
 
-            // validate inputs
+            // Validate inputs
             assert(amount > 0, 'Amount must be greater than 0');
             assert(group_id != 0, 'Group ID must be greater than 0');
 
-            // check if group exists and is active
+            // Check if group exists and is active
             let group_info = self.groups.read(group_id);
             assert(group_info.group_id != 0, 'Group does not exist');
             assert(
@@ -457,23 +593,21 @@ pub mod SaveCircle {
                 'Group must be Active or Created',
             );
 
-            // check if user has enough balance - this should check token balance, not locked
-            // balance
+            // Check if user has enough balance
             let token = IERC20Dispatcher { contract_address: token_address };
             let user_token_balance = token.balance_of(caller);
             assert(user_token_balance >= amount, 'Insufficient token balance');
 
-            // transfer tokens from user to this contract
-
+            // Transfer tokens from user to this contract
             let success = token.transfer_from(caller, get_contract_address(), amount);
             assert(success, 'Token transfer failed');
 
-            // update the group lock storage using correct tuple access
+            // Update the group lock storage using correct tuple access
             let current_group_lock = self.group_lock.read((group_id, caller));
             let new_group_lock = current_group_lock + amount;
             self.group_lock.write((group_id, caller), new_group_lock);
 
-            // update user's total locked balance
+            // Update user's total locked balance
             let current_locked = self.locked_balance.read(caller);
             self.locked_balance.write(caller, current_locked + amount);
 
@@ -488,7 +622,6 @@ pub mod SaveCircle {
         fn get_locked_balance(self: @ContractState, user: ContractAddress) -> u256 {
             self.locked_balance.read(user)
         }
-
 
         fn withdraw_locked(ref self: ContractState, group_id: u256) -> u256 {
             let caller = get_caller_address();
@@ -508,8 +641,7 @@ pub mod SaveCircle {
             let cycle_duration_seconds = match group_info.cycle_unit {
                 TimeUnit::Days => group_info.cycle_duration * 86400, // 24 * 60 * 60
                 TimeUnit::Weeks => group_info.cycle_duration * 604800, // 7 * 24 * 60 * 60
-                TimeUnit::Months => group_info.cycle_duration
-                    * 2592000 // 30 * 24 * 60 * 60 (approximate)
+                TimeUnit::Months => group_info.cycle_duration * 2592000 // 30 * 24 * 60 * 60 (approximate)
             };
             let cycle_end_time = group_info.start_time + cycle_duration_seconds;
 
@@ -527,7 +659,7 @@ pub mod SaveCircle {
             assert(group_member.locked_amount > 0, 'No locked funds to withdraw');
 
             // Check if user has already withdrawn (prevent double withdrawal)
-            assert(!group_member.has_been_paid, 'Funds  already been withdrawn');
+            assert(!group_member.has_been_paid, 'Funds already been withdrawn');
 
             // Calculate withdrawable amount (could include penalties for missed contributions)
             let withdrawable_amount = if self._has_completed_circle(caller, group_id) {
@@ -564,25 +696,18 @@ pub mod SaveCircle {
             // Update group lock storage
             self.group_lock.write((group_id, caller), 0);
 
-            self.emit(FundsWithdrawn { group_id, user: caller, amount: withdrawable_amount });
+            self.emit(FundsWithdrawn { 
+                group_id, 
+                user: caller, 
+                amount: withdrawable_amount 
+            });
 
             withdrawable_amount
         }
 
-        fn get_penalty_locked(self: @ContractState, user: ContractAddress, group_id: u256) -> u256 {
-            self._get_penalty_amount(user, group_id)
-        }
-
-        fn has_completed_circle(
-            self: @ContractState, user: ContractAddress, group_id: u256,
-        ) -> bool {
-            self._has_completed_circle(user, group_id)
-        }
-
-
         fn contribute(ref self: ContractState, group_id: u256) -> bool {
             let caller = get_caller_address();
-            let current_time = get_block_timestamp();
+            let _current_time = get_block_timestamp();
 
             // Check if contract is paused
             self.pausable.assert_not_paused();
@@ -602,8 +727,7 @@ pub mod SaveCircle {
             // Calculate total payment: contribution + 1% insurance fee
             let contribution_amount = group_info.contribution_amount;
             let insurance_rate = self.insurance_rate.read();
-            let insurance_fee = (contribution_amount * insurance_rate)
-                / 10000; // 1% = 100 basis points
+            let insurance_fee = (contribution_amount * insurance_rate) / 10000; // 1% = 100 basis points
             let total_payment = contribution_amount + insurance_fee;
 
             // Check if user has enough token balance
@@ -614,44 +738,46 @@ pub mod SaveCircle {
             assert(user_balance >= total_payment, 'Insufficient bal for contri');
 
             // Transfer total payment from user to contract
-            let success = payment_token
-                .transfer_from(caller, get_contract_address(), total_payment);
+            let success = payment_token.transfer_from(caller, get_contract_address(), total_payment);
             assert(success, 'Contribution transfer failed');
 
             // Add insurance fee to group's insurance pool
             let current_pool = self.insurance_pool.read(group_id);
             self.insurance_pool.write(group_id, current_pool + insurance_fee);
 
-            // Update member's contribution count
+            // Update member's contribution count and total contributed
             group_member.contribution_count += 1;
+            group_member.total_contributed += contribution_amount;
             self.group_members.write((group_id, member_index), group_member);
 
+            // Update user profile statistics
+            let mut user_profile = self.user_profiles.read(caller);
+            user_profile.total_contribution += contribution_amount;
+            user_profile.total_payments += 1;
+            user_profile.on_time_payments += 1; // Assuming on-time for now
+            self.user_profiles.write(caller, user_profile);
+
+            // Record contribution activity
+            self._record_activity(
+                caller,
+                ActivityType::Contribution,
+                "Made contribution to group",
+                contribution_amount,
+                Option::Some(group_id),
+                false
+            );
+
             // Emit contribution event
-            self
-                .emit(
-                    ContributionMade {
-                        group_id,
-                        user: caller,
-                        contribution_amount,
-                        insurance_fee,
-                        total_paid: total_payment,
-                    },
-                );
+            self.emit(ContributionMade {
+                group_id,
+                user: caller,
+                contribution_amount,
+                insurance_fee,
+                total_paid: total_payment,
+            });
 
             true
         }
-
-
-        /// Get insurance pool balance for a specific group
-        fn get_insurance_pool_balance(self: @ContractState, group_id: u256) -> u256 {
-            self.insurance_pool.read(group_id)
-        }
-
-        /// Get protocol treasury balance
-        fn get_protocol_treasury(self: @ContractState) -> u256 {
-            self.protocol_treasury.read()
-        }
-
 
         fn activate_group(ref self: ContractState, group_id: u256) -> bool {
             let caller = get_caller_address();
@@ -676,9 +802,6 @@ pub mod SaveCircle {
             true
         }
 
-
-        /// Distribute payout to the next eligible member based on priority
-        /// Priority: 1) Highest locked amount, 2) Earliest join time (tiebreaker)
         fn distribute_payout(ref self: ContractState, group_id: u256) -> bool {
             let caller = get_caller_address();
 
@@ -694,7 +817,7 @@ pub mod SaveCircle {
             assert(
                 group_info.creator == caller
                     || self.accesscontrol.has_role(DEFAULT_ADMIN_ROLE, caller),
-                'Only creator  can distribute',
+                'Only creator can distribute',
             );
 
             // Check if there are contributions to distribute
@@ -704,7 +827,8 @@ pub mod SaveCircle {
             // Find next eligible member for payout
             let next_recipient = self._get_next_payout_recipient(group_id);
             assert(
-                next_recipient.user != contract_address_const::<0>(), 'No eligible recipient found',
+                next_recipient.user != contract_address_const::<0>(), 
+                'No eligible recipient found',
             );
 
             // Calculate payout amount (total contributions minus insurance fees already deducted)
@@ -718,37 +842,157 @@ pub mod SaveCircle {
             assert(success, 'Payout transfer failed');
 
             // Update recipient's payout status
-            let mut updated_member = next_recipient;
+            let mut updated_member = next_recipient.clone();
             updated_member.has_been_paid = true;
             updated_member.payout_cycle = group_info.current_cycle.try_into().unwrap() + 1;
+            updated_member.total_recieved += payout_amount;
             self.group_members.write((group_id, updated_member.member_index), updated_member);
 
             // Update group cycle information
             group_info.current_cycle += 1;
             group_info.payout_order += 1;
+            group_info.last_payout_time = get_block_timestamp();
 
             // Check if all members have been paid (cycle complete)
             if group_info.payout_order >= group_info.members {
                 group_info.state = GroupState::Completed;
             }
 
-            self.groups.write(group_id, group_info);
+            self.groups.write(group_id, group_info.clone());
+
+            // Record payout activity for recipient
+            self._record_activity(
+                next_recipient.user,
+                ActivityType::PayoutReceived,
+                "Received payout from group",
+                payout_amount,
+                Option::Some(group_id),
+                true
+            );
 
             // Emit payout event
-            self
-                .emit(
-                    PayoutDistributed {
-                        group_id,
-                        recipient: next_recipient.user,
-                        amount: payout_amount,
-                        cycle: group_info.current_cycle,
-                    },
-                );
+            self.emit(PayoutDistributed {
+                group_id,
+                recipient: next_recipient.user,
+                amount: payout_amount,
+                cycle: group_info.current_cycle,
+            });
 
             true
         }
 
-        /// Get the next member who should receive payout based on priority
+        // Enhanced profile functions from modified version
+        fn get_user_joined_groups(
+            self: @ContractState, 
+            user_address: ContractAddress
+        ) -> Array<UserGroupDetails> {
+            let joined_count = self.user_joined_groups_count.read(user_address);
+            let mut groups = ArrayTrait::new();
+            
+            let mut i = 0;
+            while i < joined_count {
+                let group_id = self.user_joined_groups_list.read((user_address, i));
+                let group_info = self.groups.read(group_id);
+                let member_index = self.user_joined_groups.read((user_address, group_id));
+                let member_data = self.group_members.read((group_id, member_index));
+
+                let group_details = UserGroupDetails {
+                    group_info: group_info.clone(),
+                    member_data: member_data.clone(),
+                    next_payout_date: self._calculate_next_payout_date(group_id),
+                    position_in_queue: self._get_position_in_payout_queue(group_id, user_address),
+                    total_contributed_so_far: member_data.total_contributed,
+                    expected_payout_amount: group_info.contribution_amount * group_info.member_limit.into(),
+                };
+
+                groups.append(group_details);
+                i += 1;
+            };
+            
+            groups
+        }
+
+        fn get_user_activities(
+            self: @ContractState, 
+            user_address: ContractAddress, 
+            limit: u32
+        ) -> Array<UserActivity> {
+            let activity_count = self.user_activity_count.read(user_address);
+            let mut activities = ArrayTrait::new();
+            
+            let start_index = if activity_count > limit.into() { 
+                activity_count - limit.into() 
+            } else { 
+                0 
+            };
+            
+            let mut i = start_index;
+            while i < activity_count {
+                let activity = self.user_activities.read((user_address, i));
+                activities.append(activity);
+                i += 1;
+            };
+            
+            activities
+        }
+
+        fn get_user_statistics(
+            self: @ContractState, 
+            user_address: ContractAddress
+        ) -> UserStatistics {
+            self.user_statistics.read(user_address)
+        }
+
+        // Keep all existing getter functions
+        fn get_group_info(self: @ContractState, group_id: u256) -> GroupInfo {
+            self.groups.read(group_id)
+        }
+
+        fn get_group_member(
+            self: @ContractState, 
+            group_id: u256, 
+            member_index: u32,
+        ) -> GroupMember {
+            self.group_members.read((group_id, member_index))
+        }
+
+        fn get_user_member_index(
+            self: @ContractState, 
+            user: ContractAddress, 
+            group_id: u256,
+        ) -> u32 {
+            self.user_joined_groups.read((user, group_id))
+        }
+
+        fn is_group_member(
+            self: @ContractState, 
+            group_id: u256, 
+            user: ContractAddress
+        ) -> bool {
+            self._is_member(group_id, user)
+        }
+
+        // Keep all original financial getter functions
+        fn get_penalty_locked(self: @ContractState, user: ContractAddress, group_id: u256) -> u256 {
+            self._get_penalty_amount(user, group_id)
+        }
+
+        fn has_completed_circle(
+            self: @ContractState, 
+            user: ContractAddress, 
+            group_id: u256,
+        ) -> bool {
+            self._has_completed_circle(user, group_id)
+        }
+
+        fn get_insurance_pool_balance(self: @ContractState, group_id: u256) -> u256 {
+            self.insurance_pool.read(group_id)
+        }
+
+        fn get_protocol_treasury(self: @ContractState) -> u256 {
+            self.protocol_treasury.read()
+        }
+
         fn get_next_payout_recipient(self: @ContractState, group_id: u256) -> GroupMember {
             self._get_next_payout_recipient(group_id)
         }
@@ -776,6 +1020,9 @@ pub mod SaveCircle {
                     contribution_count: 0,
                     late_contributions: 0,
                     missed_contributions: 0,
+                    total_contributed: 0,
+                    total_recieved: 0,
+                    is_active: true,
                 };
                 let mut found = false;
 
@@ -785,12 +1032,12 @@ pub mod SaveCircle {
                     if member.user != contract_address_const::<0>()
                         && !self._is_processed(@processed, member.member_index) {
                         if !found {
-                            best_member = member;
+                            best_member = member.clone();
                             found = true;
                         } else {
                             // Compare priority: higher locked amount wins, then earlier join time
                             if member.locked_amount > best_member.locked_amount {
-                                best_member = member;
+                                best_member = member.clone();
                             } else if member.locked_amount == best_member.locked_amount {
                                 if member.joined_at < best_member.joined_at {
                                     best_member = member;
@@ -814,7 +1061,6 @@ pub mod SaveCircle {
         }
     }
 
-
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn _is_member(self: @ContractState, group_id: u256, user: ContractAddress) -> bool {
@@ -828,19 +1074,22 @@ pub mod SaveCircle {
             }
         }
 
-
         fn _has_completed_circle(
-            self: @ContractState, user: ContractAddress, group_id: u256,
+            self: @ContractState, 
+            user: ContractAddress, 
+            group_id: u256,
         ) -> bool {
             let member_index = self.user_joined_groups.read((user, group_id));
             let group_member = self.group_members.read((group_id, member_index));
-            let group_info = self.groups.read(group_id);
+            let _group_info = self.groups.read(group_id);
 
             group_member.missed_contributions == 0
         }
 
         fn _get_penalty_amount(
-            self: @ContractState, user: ContractAddress, group_id: u256,
+            self: @ContractState, 
+            user: ContractAddress, 
+            group_id: u256,
         ) -> u256 {
             let member_index = self.user_joined_groups.read((user, group_id));
             let group_member = self.group_members.read((group_id, member_index));
@@ -850,8 +1099,7 @@ pub mod SaveCircle {
             // Penalty = missed_contributions * contribution_amount * penalty_rate
             // For simplicity, let's use a 10% penalty per missed contribution
             let penalty_rate = 10; // 10% penalty per missed contribution
-            let base_penalty = group_member.missed_contributions.into()
-                * group_info.contribution_amount;
+            let base_penalty = group_member.missed_contributions.into() * group_info.contribution_amount;
             let total_penalty = (base_penalty * penalty_rate.into()) / 100_u256;
 
             // Ensure penalty doesn't exceed locked amount
@@ -862,7 +1110,6 @@ pub mod SaveCircle {
                 total_penalty
             }
         }
-
 
         fn _get_next_payout_recipient(self: @ContractState, group_id: u256) -> GroupMember {
             let group_info = self.groups.read(group_id);
@@ -877,6 +1124,9 @@ pub mod SaveCircle {
                 contribution_count: 0,
                 late_contributions: 0,
                 missed_contributions: 0,
+                total_contributed: 0,
+                total_recieved: 0,
+                is_active: true,
             };
             let mut found_eligible = false;
 
@@ -890,7 +1140,7 @@ pub mod SaveCircle {
                     } else {
                         // Compare priority: higher locked amount wins, then earlier join time
                         if member.locked_amount > best_member.locked_amount {
-                            best_member = member;
+                            best_member = member.clone();
                         } else if member.locked_amount == best_member.locked_amount {
                             if member.joined_at < best_member.joined_at {
                                 best_member = member;
@@ -904,56 +1154,6 @@ pub mod SaveCircle {
             assert(found_eligible, 'No eligible member found');
             best_member
         }
-
-        fn _sort_members_by_priority(
-            self: @ContractState, mut members: Array<GroupMember>,
-        ) -> Array<GroupMember> {
-            let len = members.len();
-            if len <= 1 {
-                return members;
-            }
-
-            // Simple bubble sort implementation for Cairo arrays
-            let mut i = 0;
-            while i < len {
-                let mut j = 0;
-                while j < len - 1 - i {
-                    let member_j = *members.at(j);
-                    let member_j_plus_1 = *members.at(j + 1);
-
-                    // Compare: higher locked amount first, then earlier join time
-                    let should_swap = if member_j.locked_amount < member_j_plus_1.locked_amount {
-                        true
-                    } else if member_j.locked_amount == member_j_plus_1.locked_amount {
-                        member_j.joined_at > member_j_plus_1.joined_at
-                    } else {
-                        false
-                    };
-
-                    if should_swap {
-                        // Swap elements by creating new array
-                        let mut new_members = array![];
-                        let mut k = 0;
-                        while k < len {
-                            if k == j {
-                                new_members.append(member_j_plus_1);
-                            } else if k == j + 1 {
-                                new_members.append(member_j);
-                            } else {
-                                new_members.append(*members.at(k));
-                            }
-                            k += 1;
-                        }
-                        members = new_members;
-                    }
-                    j += 1;
-                }
-                i += 1;
-            }
-
-            members
-        }
-
 
         fn _calculate_total_contributions(self: @ContractState, group_id: u256) -> u256 {
             let group_info = self.groups.read(group_id);
@@ -972,8 +1172,7 @@ pub mod SaveCircle {
 
                 // Calculate this member's total contributions
                 // contribution_count * contribution_amount per cycle
-                let member_contributions = group_member.contribution_count.into()
-                    * group_info.contribution_amount;
+                let member_contributions = group_member.contribution_count.into() * group_info.contribution_amount;
                 total_contributions += member_contributions;
 
                 member_index += 1;
@@ -981,7 +1180,6 @@ pub mod SaveCircle {
 
             total_contributions
         }
-
 
         fn _is_processed(self: @ContractState, processed: @Array<u32>, member_index: u32) -> bool {
             let mut i = 0;
@@ -994,6 +1192,60 @@ pub mod SaveCircle {
             }
             false
         }
+
+        // New internal functions from modified version
+        fn _record_activity(
+            ref self: ContractState,
+            user: ContractAddress,
+            activity_type: ActivityType,
+            description: ByteArray,
+            amount: u256,
+            group_id: Option<u256>,
+            is_positive: bool,
+        ) {
+            let activity_id = self.next_activity_id.read();
+            let user_activity_count = self.user_activity_count.read(user);
+            
+            let activity = UserActivity {
+                activity_id,
+                user_address: user,
+                activity_type,
+                description,
+                amount,
+                group_id,
+                timestamp: get_block_timestamp(),
+                is_positive_amount: is_positive,
+            };
+            
+            self.user_activities.write((user, user_activity_count), activity);
+            self.user_activity_count.write(user, user_activity_count + 1);
+            self.next_activity_id.write(activity_id + 1);
+        }
+
+        fn _calculate_next_payout_date(self: @ContractState, group_id: u256) -> u64 {
+            let group_info = self.groups.read(group_id);
+            // Simple calculation - add cycle_duration to last_payout_time or start_time
+            if group_info.last_payout_time > 0 {
+                group_info.last_payout_time + group_info.cycle_duration
+            } else {
+                group_info.start_time + group_info.cycle_duration
+            }
+        }
+
+        fn _get_position_in_payout_queue(
+            self: @ContractState, 
+            group_id: u256, 
+            user: ContractAddress
+        ) -> u32 {
+            let member_index = self.user_joined_groups.read((user, group_id));
+            let group_info = self.groups.read(group_id);
+            
+            // Simple queue position based on join order and current cycle
+            if member_index >= group_info.current_cycle.try_into().unwrap() {
+                member_index - group_info.current_cycle.try_into().unwrap()
+            } else {
+                (group_info.member_limit - group_info.current_cycle.try_into().unwrap()) + member_index
+            }
+        }
     }
 }
-

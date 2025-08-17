@@ -1,17 +1,13 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use save_circle::contracts::Savecircle::SaveCircle;
 use save_circle::contracts::Savecircle::SaveCircle::Event;
-use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{
-    ContributionMade, GroupCreated, PayoutDistributed, UserJoinedGroup, UserRegistered,
-};
+use save_circle::enums::Enums::{LockType, TimeUnit};
+use save_circle::events::Events::{PayoutDistributed};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
-use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+use starknet::{ContractAddress, contract_address_const};
 
 fn setup() -> (ContractAddress, ContractAddress, ContractAddress) {
     // create default admin address
@@ -54,7 +50,7 @@ fn setup_group_with_contributions(
     while i < users.len() {
         let user = *users.at(i);
         start_cheat_caller_address(contract_address, user);
-        dispatcher.register_user('TestUser', 'avatar.png');
+        dispatcher.register_user("TestUser", "avatar.png");
         stop_cheat_caller_address(contract_address);
         i += 1;
     }
@@ -63,14 +59,15 @@ fn setup_group_with_contributions(
     start_cheat_caller_address(contract_address, creator);
     let group_id = dispatcher
         .create_public_group(
-            users.len().try_into().unwrap(), // member_limit
-            contribution_amount, // contribution_amount  
-            LockType::None, // lock_type
-            4, // cycle_duration
-            TimeUnit::Weeks, // cycle_unit
-            GroupVisibility::Public, // visibility
-            false, // requires_lock
-            0 // min_reputation_score
+            "Group 1",
+            "First test group",
+            5,
+            100,
+            LockType::Progressive,
+            1,
+            TimeUnit::Days,
+            false,
+            0,
         );
 
     // Activate the group
@@ -331,10 +328,18 @@ fn test_distribute_payout_inactive_group() {
     start_cheat_caller_address(contract_address, user);
 
     // Register user and create group but don't activate
-    dispatcher.register_user('TestUser', 'avatar.png');
+    dispatcher.register_user("TestUser", "avatar.png");
     let group_id = dispatcher
         .create_public_group(
-            5, 1000, LockType::None, 4, TimeUnit::Weeks, GroupVisibility::Public, false, 0,
+            "Group 1",
+            "First test group",
+            5,
+            100,
+            LockType::Progressive,
+            1,
+            TimeUnit::Days,
+            false,
+            0,
         );
 
     // Try to distribute payout on inactive group
@@ -342,7 +347,7 @@ fn test_distribute_payout_inactive_group() {
 }
 
 #[test]
-#[should_panic(expected: ('Only creator  can distribute',))]
+#[should_panic(expected: "Only creator  can distribute")]
 fn test_distribute_payout_unauthorized_caller() {
     let (contract_address, owner, token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -365,7 +370,7 @@ fn test_distribute_payout_unauthorized_caller() {
 }
 
 #[test]
-#[should_panic(expected: ('No contributions to distribute',))]
+#[should_panic(expected: "No contributions to distribute")]
 fn test_distribute_payout_no_contributions() {
     let (contract_address, _owner, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -374,10 +379,18 @@ fn test_distribute_payout_no_contributions() {
     start_cheat_caller_address(contract_address, user);
 
     // Register user and create/activate group
-    dispatcher.register_user('TestUser', 'avatar.png');
+    dispatcher.register_user("TestUser", "avatar.png");
     let group_id = dispatcher
         .create_public_group(
-            5, 1000, LockType::None, 4, TimeUnit::Weeks, GroupVisibility::Public, false, 0,
+            "Group 1",
+            "First test group",
+            5,
+            100,
+            LockType::Progressive,
+            1,
+            TimeUnit::Days,
+            false,
+            0,
         );
     dispatcher.activate_group(group_id);
     dispatcher.join_group(group_id);

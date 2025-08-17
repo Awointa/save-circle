@@ -1,15 +1,10 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use save_circle::contracts::Savecircle::SaveCircle;
-use save_circle::contracts::Savecircle::SaveCircle::Event;
-use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited};
+use save_circle::enums::Enums::{LockType, TimeUnit};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
-use save_circle::structs::Structs::UserProfile;
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
-    start_cheat_caller_address, stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+use starknet::{ContractAddress, contract_address_const};
 
 
 fn setup() -> (ContractAddress, ContractAddress, ContractAddress) {
@@ -50,17 +45,18 @@ fn test_lock_liquidity_basic_functionality() {
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     // Create a group with lock requirement
     let group_id = dispatcher
         .create_public_group(
+            "TestGroup", // name
+            "TestGroupDescription", // description,
             5, // member_limit
             1000, // contribution_amount  
             LockType::Progressive, // lock_type
             4, // cycle_duration
             TimeUnit::Weeks, // cycle_unit
-            GroupVisibility::Public, // visibility
             true, // requires_lock
             0 // min_reputation_score
         );
@@ -119,11 +115,19 @@ fn test_lock_liquidity_multiple_locks() {
 
     // Register user and create group
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     let group_id = dispatcher
         .create_public_group(
-            5, 500, LockType::Progressive, 2, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
@@ -176,11 +180,19 @@ fn test_lock_liquidity_insufficient_balance() {
 
     // Register user and create group
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
-    let group_id = dispatcher
+    dispatcher
         .create_public_group(
-            5, 1000, LockType::Progressive, 4, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
@@ -214,15 +226,23 @@ fn test_get_locked_balance_multiple_users() {
 
     // Register users
     start_cheat_caller_address(contract_address, user1);
-    dispatcher.register_user('User1'.into(), 'avatar1.png'.into());
+    dispatcher.register_user("User1", "avatar1.png");
     let group_id = dispatcher
         .create_public_group(
-            5, 1000, LockType::Progressive, 4, TimeUnit::Weeks, GroupVisibility::Public, true, 0,
+            "TestGroup", // name
+            "TestGroupDescription", // description,
+            5, // member_limit
+            1000, // contribution_amount  
+            LockType::Progressive, // lock_type
+            4, // cycle_duration
+            TimeUnit::Weeks, // cycle_unit
+            true, // requires_lock
+            0 // min_reputation_score
         );
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, user2);
-    dispatcher.register_user('User2'.into(), 'avatar2.png'.into());
+    dispatcher.register_user("User2", "avatar2.png");
     stop_cheat_caller_address(contract_address);
 
     // Setup tokens for both users

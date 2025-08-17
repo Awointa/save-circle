@@ -4,7 +4,7 @@ use starknet::ContractAddress;
 #[derive(Drop, starknet::Event)]
 pub struct UserRegistered {
     pub user: ContractAddress,
-    pub name: felt252,
+    pub name: ByteArray,
 }
 
 #[derive(Drop, starknet::Event)]
@@ -64,4 +64,13 @@ pub struct PayoutDistributed {
     pub recipient: ContractAddress,
     pub amount: u256,
     pub cycle: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct PayoutSent {
+    pub group_id: u256,
+    pub recipient: ContractAddress,
+    pub amount: u256,
+    pub cycle_number: u64,
+    pub timestamp: u64,
 }
