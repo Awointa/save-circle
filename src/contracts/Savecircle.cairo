@@ -181,8 +181,8 @@ pub mod SaveCircle {
             // Enhanced profile with additional fields from modified version
             let new_profile = UserProfile {
                 user_address: caller,
-                name,
-                avatar,
+                name: name.clone(),
+                avatar: avatar.clone(),
                 is_registered: true,
                 total_lock_amount: 0,
                 profile_created_at: current_time,
@@ -222,7 +222,7 @@ pub mod SaveCircle {
             self._record_activity(
                 caller,
                 ActivityType::UserRegistered,
-                selector!("User registered on SaveCircle"),
+                "User registered on SaveCircle",
                 0,
                 Option::None,
                 false
@@ -340,7 +340,7 @@ pub mod SaveCircle {
             self._record_activity(
                 caller,
                 ActivityType::GroupCreated,
-                selector!("Created new public group"),
+                "Created new public group",
                 0,
                 Option::Some(group_id),
                 false
@@ -437,7 +437,7 @@ pub mod SaveCircle {
             self._record_activity(
                 caller,
                 ActivityType::GroupCreated,
-                selector!("Created new private group"),
+                "Created new private group",
                 0,
                 Option::Some(group_id),
                 false
@@ -548,7 +548,7 @@ pub mod SaveCircle {
             self._record_activity(
                 caller,
                 ActivityType::GroupJoined,
-                selector!("Joined new group"),
+                "Joined new group",
                 0,
                 Option::Some(group_id),
                 false
@@ -761,7 +761,7 @@ pub mod SaveCircle {
             self._record_activity(
                 caller,
                 ActivityType::Contribution,
-                selector!("Made contribution to group"),
+                "Made contribution to group",
                 contribution_amount,
                 Option::Some(group_id),
                 false
@@ -864,7 +864,7 @@ pub mod SaveCircle {
             self._record_activity(
                 next_recipient.user,
                 ActivityType::PayoutReceived,
-                selector!("Received payout from group"),
+                "Received payout from group",
                 payout_amount,
                 Option::Some(group_id),
                 true
