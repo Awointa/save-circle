@@ -1,7 +1,7 @@
 use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit, ActivityType};
 use starknet::ContractAddress;
 
-#[derive(Drop, Serde, Copy, starknet::Store)]
+#[derive(Drop, Serde, Clone, starknet::Store)]
 pub struct UserProfile {
     pub user_address: ContractAddress,
     pub name: ByteArray,

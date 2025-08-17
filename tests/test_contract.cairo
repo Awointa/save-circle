@@ -47,10 +47,10 @@ fn test_register_user_success() {
     let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
     start_cheat_caller_address(contract_address, user);
 
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
-    let result = dispatcher.register_user(name, avatar);
+    let result = dispatcher.register_user(name.clone(), avatar.clone());
 
     assert(result == true, 'register_ should return true');
 
@@ -80,10 +80,10 @@ fn test_register_user_event() {
     let user: ContractAddress = contract_address_const::<'2'>(); // arbitrary test address
     start_cheat_caller_address(contract_address, user);
 
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
-    dispatcher.register_user(name, avatar);
+    dispatcher.register_user(name.clone(), avatar);
 
     spy
         .assert_emitted(
@@ -100,8 +100,8 @@ fn test_create_public_group() {
     start_cheat_caller_address(contract_address, user);
 
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -158,8 +158,8 @@ fn test_create_public_group_event() {
     start_cheat_caller_address(contract_address, user);
 
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -209,8 +209,8 @@ fn test_create_private_group_success() {
     start_cheat_caller_address(contract_address, user);
 
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -260,10 +260,9 @@ fn test_create_private_group_with_lock() {
     let user2: ContractAddress = contract_address_const::<'3'>(); // arbitrary test address
     start_cheat_caller_address(contract_address, user);
 
-    let mut spy = spy_events();
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -281,7 +280,7 @@ fn test_create_private_group_with_lock() {
             TimeUnit::Days,
             invited_members,
             true,
-            LockType::Upfront,
+            LockType::Progressive,
             0,
         );
 
@@ -315,8 +314,8 @@ fn test_users_invited_event() {
 
     let mut spy = spy_events();
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -362,8 +361,8 @@ fn test_create_private_group_event() {
     let mut spy = spy_events();
 
     // register user
-    let name: felt252 = 'bob_the_builder';
-    let avatar: felt252 = 'https://example.com/avatar.png';
+    let name: ByteArray = "bob_the_builder";
+    let avatar: ByteArray = "https://example.com/avatar.png";
 
     dispatcher.register_user(name, avatar);
 
@@ -418,17 +417,17 @@ fn test_join_group() {
 
     // Register creator
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
     stop_cheat_caller_address(contract_address);
 
     // Register joiner
     start_cheat_caller_address(contract_address, joiner);
-    dispatcher.register_user('Joiner', 'https://example.com/joiner.png');
+    dispatcher.register_user("Joiner", "https://example.com/joiner.png");
     stop_cheat_caller_address(contract_address);
 
     // create group
     start_cheat_caller_address(contract_address, creator);
-    let now = get_block_timestamp();
+    let _now = get_block_timestamp();
     let group_id = dispatcher
         .create_public_group(
             "Join Test Group",
@@ -442,7 +441,7 @@ fn test_join_group() {
             0,
         );
 
-    let created_group = dispatcher.get_group_info(group_id);
+    let _created_group = dispatcher.get_group_info(group_id);
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, joiner);
@@ -495,12 +494,12 @@ fn test_join_group_event() {
 
     // Register creator
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
     stop_cheat_caller_address(contract_address);
 
     // Register joiner
     start_cheat_caller_address(contract_address, joiner);
-    dispatcher.register_user('Joiner', 'https://example.com/joiner.png');
+    dispatcher.register_user("Joiner", "https://example.com/joiner.png");
     stop_cheat_caller_address(contract_address);
 
     // create group
@@ -559,19 +558,19 @@ fn test_group_member_with_multiple_members() {
 
     // Register users
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('creator', 'https://example.com/creator.png');
+    dispatcher.register_user("creator", "https://example.com/creator.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, joiner1);
-    dispatcher.register_user('joiner1', 'https://example.com/joiner1.png');
+    dispatcher.register_user("joiner1", "https://example.com/joiner1.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, joiner2);
-    dispatcher.register_user('joiner2', 'https://example.com/joiner2.png');
+    dispatcher.register_user("joiner2", "https://example.com/joiner2.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, joiner3);
-    dispatcher.register_user('joiner3', 'https://example.com/joiner3.png');
+    dispatcher.register_user("joiner3", "https://example.com/joiner3.png");
     stop_cheat_caller_address(contract_address);
 
     // Creator creates a public group
@@ -638,15 +637,15 @@ fn test_user_joins_multiple_groups() {
 
     // Register users
     start_cheat_caller_address(contract_address, creator1);
-    dispatcher.register_user('Creator1', 'https://example.com/creor1.png');
+    dispatcher.register_user("Creator1", "https://example.com/creor1.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, creator2);
-    dispatcher.register_user('Creator2', 'https://example.com/creor2.png');
+    dispatcher.register_user("Creator2", "https://example.com/creor2.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, joiner);
-    dispatcher.register_user('Joiner', 'https://example.com/joiner.png');
+    dispatcher.register_user("Joiner", "https://example.com/joiner.png");
     stop_cheat_caller_address(contract_address);
 
     // Creator1 creates first group
@@ -736,11 +735,11 @@ fn test_get_user_joined_groups() {
 
     // Register users
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
     stop_cheat_caller_address(contract_address);
 
     // Creator creates multiple groups
@@ -802,7 +801,7 @@ fn test_get_user_activities() {
 
     // Register user (this creates an activity)
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
 
     // Create a group (this creates another activity)
     dispatcher
@@ -840,7 +839,7 @@ fn test_get_user_statistics() {
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
     stop_cheat_caller_address(contract_address);
 
     // Get user statistics
@@ -865,11 +864,11 @@ fn test_get_user_profile_view_data() {
 
     // Register users
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
 
     // Create a group
     let group_id = dispatcher
@@ -896,7 +895,7 @@ fn test_get_user_profile_view_data() {
 
     // Verify profile
     assert(profile_data.profile.user_address == user, 'profile user mismatch');
-    assert(profile_data.profile.name == 'TestUser', 'profile name mismatch');
+    assert(profile_data.profile.name == "TestUser", 'profile name mismatch');
     assert(profile_data.profile.is_registered == true, 'should be registered');
     assert(profile_data.profile.reputation_score == 0, 'reputation should be 0');
 
@@ -923,10 +922,10 @@ fn test_register_user_already_registered() {
     start_cheat_caller_address(contract_address, user);
 
     // Register user first time
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
 
     // Try to register again - should panic
-    dispatcher.register_user('TestUser2', 'https://example.com/user2.png');
+    dispatcher.register_user("TestUser2", "https://example.com/user2.png");
 }
 
 #[test]
@@ -939,7 +938,7 @@ fn test_register_user_empty_name() {
     start_cheat_caller_address(contract_address, user);
 
     // Try to register with empty name - should panic
-    dispatcher.register_user(0, 'https://example.com/user.png');
+    dispatcher.register_user("", "https://example.com/user.png");
 }
 
 #[test]
@@ -977,7 +976,7 @@ fn test_join_group_unregistered_user() {
 
     // Register creator and create group
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
     let group_id = dispatcher
         .create_public_group(
             "Test Group",
@@ -1007,7 +1006,7 @@ fn test_join_nonexistent_group() {
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
 
     // Try to join non-existent group - should panic
     dispatcher.join_group(999);
@@ -1024,11 +1023,11 @@ fn test_join_group_already_member() {
 
     // Register users
     start_cheat_caller_address(contract_address, creator);
-    dispatcher.register_user('Creator', 'https://example.com/creator.png');
+    dispatcher.register_user("Creator", "https://example.com/creator.png");
     stop_cheat_caller_address(contract_address);
 
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser', 'https://example.com/user.png');
+    dispatcher.register_user("TestUser", "https://example.com/user.png");
     stop_cheat_caller_address(contract_address);
 
     // Creator creates group

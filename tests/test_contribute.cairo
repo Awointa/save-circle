@@ -52,14 +52,15 @@ fn setup_user_and_group(
     // Create a group
     let group_id = dispatcher
         .create_public_group(
-            5, // member_limit
-            contribution_amount, // contribution_amount  
-            LockType::None, // lock_type
-            4, // cycle_duration
-            TimeUnit::Weeks, // cycle_unit
-            GroupVisibility::Public, // visibility
-            false, // requires_lock
-            0 // min_reputation_score
+            "Group 1",
+            "First test group",
+            5,
+            100,
+            LockType::Progressive,
+            1,
+            TimeUnit::Days,
+            false,
+            0,
         );
 
     // Activate the group (creator can activate)
@@ -507,14 +508,15 @@ fn test_contribute_two_groups_multiple_members() {
 
     let group2_id = dispatcher
         .create_public_group(
-            5, // member_limit
-            contribution_amount, // contribution_amount  
-            LockType::None, // lock_type
-            4, // cycle_duration
-            TimeUnit::Weeks, // cycle_unit
-            GroupVisibility::Public, // visibility
-            false, // requires_lock
-            0 // min_reputation_score
+            "Group 1",
+            "First test group",
+            5,
+            100,
+            LockType::Progressive,
+            1,
+            TimeUnit::Days,
+            false,
+            0,
         );
 
     dispatcher.activate_group(group2_id);

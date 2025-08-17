@@ -1,15 +1,10 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use save_circle::contracts::Savecircle::SaveCircle;
-use save_circle::contracts::Savecircle::SaveCircle::Event;
-use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited};
+use save_circle::enums::Enums::{LockType, TimeUnit};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
-use save_circle::structs::Structs::UserProfile;
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
-    start_cheat_caller_address, stop_cheat_caller_address,
+    ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+use starknet::{ContractAddress, contract_address_const};
 
 
 fn setup() -> (ContractAddress, ContractAddress, ContractAddress) {
@@ -103,7 +98,7 @@ fn test_lock_liquidity_basic_functionality() {
     assert(final_locked_balance == lock_amount, 'Lock balance equal lock amount');
 
     // Check user profile was updated
-    let user_profile = dispatcher.get_user_profile_view_data(user);
+    let user_profile = dispatcher.get_user_profile(user);
     assert(user_profile.total_lock_amount == lock_amount, 'Profile show locked amount');
 
     stop_cheat_caller_address(contract_address);
@@ -187,7 +182,7 @@ fn test_lock_liquidity_insufficient_balance() {
     start_cheat_caller_address(contract_address, user);
     dispatcher.register_user("TestUser", "avatar.png");
 
-    let group_id = dispatcher
+    dispatcher
         .create_public_group(
             "TestGroup", // name
             "TestGroupDescription", // description,

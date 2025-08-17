@@ -1,5 +1,5 @@
 use save_circle::enums::Enums::{LockType, TimeUnit};
-use save_circle::structs::Structs::{GroupInfo, GroupMember, UserActivity, UserStatistics, UserGroupDetails, ProfileViewData};
+use save_circle::structs::Structs::{GroupInfo, GroupMember, UserActivity, UserStatistics, UserGroupDetails, ProfileViewData, UserProfile};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -36,7 +36,8 @@ pub trait Isavecircle<TContractState> {
         lock_type: LockType,
         min_reputation_score: u32,
     ) -> u256;
-
+ 
+    fn get_user_profile(self: @TContractState, user_address: ContractAddress) -> UserProfile;
 
     fn join_group(ref self: TContractState, group_id: u256) -> u32;
 

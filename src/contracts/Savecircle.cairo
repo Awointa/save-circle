@@ -28,8 +28,7 @@ pub mod SaveCircle {
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec,
     };
     use starknet::{
-        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address,
-        get_contract_address,
+        ClassHash, ContractAddress, contract_address_const, get_block_timestamp, get_caller_address, get_contract_address
     };
     use super::{PAUSER_ROLE, UPGRADER_ROLE};
 
@@ -236,6 +235,12 @@ pub mod SaveCircle {
             self.emit(UserRegistered { user: caller, name });
             true
         }
+
+        fn get_user_profile(self: @ContractState, user_address: ContractAddress) -> UserProfile {
+            self.user_profiles.entry(user_address).read()
+        }
+
+
 
         // Enhanced get_user_profile that returns comprehensive data (from modified version)
         fn get_user_profile_view_data(self: @ContractState, user_address: ContractAddress) -> ProfileViewData {
@@ -702,7 +707,7 @@ pub mod SaveCircle {
 
         fn contribute(ref self: ContractState, group_id: u256) -> bool {
             let caller = get_caller_address();
-            let current_time = get_block_timestamp();
+            let _current_time = get_block_timestamp();
 
             // Check if contract is paused
             self.pausable.assert_not_paused();
