@@ -1,15 +1,13 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use save_circle::contracts::Savecircle::SaveCircle;
-use save_circle::contracts::Savecircle::SaveCircle::Event;
-use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{ContributionMade, GroupCreated, UserJoinedGroup, UserRegistered};
+use save_circle::enums::Enums::{LockType, TimeUnit};
+use save_circle::events::Events::{ContributionMade};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
-use save_circle::structs::Structs::{GroupInfo, GroupMember, UserProfile, joined_group};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+use starknet::{ContractAddress, contract_address_const};
 
 fn setup() -> (ContractAddress, ContractAddress, ContractAddress) {
     // create default admin address
@@ -47,7 +45,7 @@ fn setup_user_and_group(
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     // Create a group
     let group_id = dispatcher
@@ -100,7 +98,7 @@ fn test_contribute_basic_functionality() {
     // Test contribution
     start_cheat_caller_address(contract_address, user);
 
-    // Check initial balances
+    // Check initial balances   
     let initial_user_balance = token_dispatcher.balance_of(user);
     let initial_contract_balance = token_dispatcher.balance_of(contract_address);
     assert(initial_user_balance == token_amount, 'User should have initial tokens');
@@ -213,9 +211,6 @@ fn test_contribute_multiple_contributions() {
 #[test]
 fn test_contribute_insufficient_balance() {
     let (contract_address, owner, token_address) = setup();
-    let dispatcher = IsavecircleDispatcher { contract_address };
-    let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
-
     let user: ContractAddress = contract_address_const::<2>();
     let contribution_amount = 1000_u256;
     let insufficient_amount = 50_u256; // Not enough for contribution + insurance fee
@@ -250,7 +245,7 @@ fn test_contribute_non_member() {
 
     // Register non_member but don't join group
     start_cheat_caller_address(contract_address, non_member);
-    dispatcher.register_user('NonMember'.into(), 'avatar2.png'.into());
+    dispatcher.register_user("NonMember", "avatar2.png");
     stop_cheat_caller_address(contract_address);
 
     // Give non_member tokens
@@ -278,7 +273,7 @@ fn test_contribute_nonexistent_group() {
 
     // Register user
     start_cheat_caller_address(contract_address, user);
-    dispatcher.register_user('TestUser'.into(), 'avatar.png'.into());
+    dispatcher.register_user("TestUser", "avatar.png");
 
     // Try to contribute to non-existent group
     let fake_group_id = 999_u256;
@@ -342,7 +337,7 @@ fn test_contribute_insurance_pool_update() {
 
     // Setup second user
     start_cheat_caller_address(contract_address, user2);
-    dispatcher.register_user('User2'.into(), 'avatar2.png'.into());
+    dispatcher.register_user("User2", "avatar2.png");
     dispatcher.join_group(group_id);
     stop_cheat_caller_address(contract_address);
 
@@ -397,13 +392,13 @@ fn test_contribute_three_members_with_insurance_fee() {
 
     // Setup second user
     start_cheat_caller_address(contract_address, user2);
-    dispatcher.register_user('User2'.into(), 'avatar2.png'.into());
+    dispatcher.register_user("User2", "avatar2.png");
     dispatcher.join_group(group_id);
     stop_cheat_caller_address(contract_address);
 
     // Setup third user
     start_cheat_caller_address(contract_address, user3);
-    dispatcher.register_user('User3'.into(), 'avatar3.png'.into());
+    dispatcher.register_user("User3", "avatar3.png");
     dispatcher.join_group(group_id);
     stop_cheat_caller_address(contract_address);
 
@@ -498,13 +493,13 @@ fn test_contribute_two_groups_multiple_members() {
 
     // Add second member to Group 1
     start_cheat_caller_address(contract_address, group1_user2);
-    dispatcher.register_user('Group1User2'.into(), 'avatar_g1u2.png'.into());
+    dispatcher.register_user("Group1User2", "avatar_g1u2.png");
     dispatcher.join_group(group1_id);
     stop_cheat_caller_address(contract_address);
 
     // Setup Group 2 (first user creates and joins)
     start_cheat_caller_address(contract_address, group2_user1);
-    dispatcher.register_user('Group2User1'.into(), 'avatar_g2u1.png'.into());
+    dispatcher.register_user("Group2User1", "avatar_g2u1.png");
 
     let group2_id = dispatcher
         .create_public_group(
@@ -525,7 +520,7 @@ fn test_contribute_two_groups_multiple_members() {
 
     // Add second member to Group 2
     start_cheat_caller_address(contract_address, group2_user2);
-    dispatcher.register_user('Group2User2'.into(), 'avatar_g2u2.png'.into());
+    dispatcher.register_user("Group2User2", "avatar_g2u2.png");
     dispatcher.join_group(group2_id);
     stop_cheat_caller_address(contract_address);
 

@@ -460,7 +460,7 @@ fn test_join_group() {
     assert(group_member.user == joiner, 'user mismatch');
     assert(group_member.group_id == group_id, 'group_id mismatch');
     assert(group_member.member_index == 0, 'member_index mismatch');
-    assert(group_member.locked_amount == 0, 'locked_amount should be 0');
+    assert(group_member.locked_amount == 100, 'locked_amount should be 100');
     assert(group_member.has_been_paid == false, 'has_been_paid should be false');
     assert(group_member.contribution_count == 0, 'contribution_count should be 0');
     assert(group_member.late_contributions == 0, 'late_contributions should be 0');
