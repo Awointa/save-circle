@@ -18,3 +18,8 @@ pub mod events {
 pub mod enums {
     pub mod Enums;
 }
+
+pub mod base {
+    pub mod errors;
+}
+
