@@ -1,7 +1,7 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use save_circle::contracts::Savecircle::SaveCircle;
 use save_circle::enums::Enums::{LockType, TimeUnit};
-use save_circle::events::Events::{ContributionMade};
+use save_circle::events::Events::ContributionMade;
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
@@ -47,13 +47,13 @@ fn setup_user_and_group(
     start_cheat_caller_address(contract_address, user);
     dispatcher.register_user("TestUser", "avatar.png");
 
-    // Create a group
+    // Create a group with the correct contribution amount
     let group_id = dispatcher
         .create_public_group(
             "Group 1",
             "First test group",
             5,
-            100,
+            contribution_amount, // Use the passed contribution_amount
             LockType::Progressive,
             1,
             TimeUnit::Days,
@@ -98,13 +98,13 @@ fn test_contribute_basic_functionality() {
     // Test contribution
     start_cheat_caller_address(contract_address, user);
 
-    // Check initial balances   
+    // Check initial balances
     let initial_user_balance = token_dispatcher.balance_of(user);
     let initial_contract_balance = token_dispatcher.balance_of(contract_address);
     assert(initial_user_balance == token_amount, 'User should have initial tokens');
 
     // Get member info before contribution
-    let member_info_before = dispatcher.get_group_member(group_id, 1);
+    let member_info_before = dispatcher.get_group_member(group_id, 0);
     assert(member_info_before.contribution_count == 0, 'contribution count should be 0');
 
     // Make contribution
@@ -506,7 +506,7 @@ fn test_contribute_two_groups_multiple_members() {
             "Group 1",
             "First test group",
             5,
-            100,
+            contribution_amount,
             LockType::Progressive,
             1,
             TimeUnit::Days,

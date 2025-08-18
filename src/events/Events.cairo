@@ -74,3 +74,12 @@ pub struct PayoutSent {
     pub cycle_number: u64,
     pub timestamp: u64,
 }
+
+#[derive(Drop, starknet::Event)]
+pub struct AdminPoolWithdrawal {
+    pub admin: ContractAddress,
+    pub group_id: u256,
+    pub amount: u256,
+    pub recipient: ContractAddress,
+    pub remaining_balance: u256,
+}

@@ -1,12 +1,17 @@
 use save_circle::enums::Enums::{LockType, TimeUnit};
-use save_circle::structs::Structs::{GroupInfo, GroupMember, UserActivity, UserStatistics, UserGroupDetails, ProfileViewData, UserProfile};
+use save_circle::structs::Structs::{
+    GroupInfo, GroupMember, ProfileViewData, UserActivity, UserGroupDetails, UserProfile,
+    UserStatistics,
+};
 use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait Isavecircle<TContractState> {
     fn register_user(ref self: TContractState, name: ByteArray, avatar: ByteArray) -> bool;
 
-    fn get_user_profile_view_data(self: @TContractState, user_address: ContractAddress) -> ProfileViewData;
+    fn get_user_profile_view_data(
+        self: @TContractState, user_address: ContractAddress,
+    ) -> ProfileViewData;
 
     fn create_public_group(
         ref self: TContractState,
@@ -36,7 +41,7 @@ pub trait Isavecircle<TContractState> {
         lock_type: LockType,
         min_reputation_score: u32,
     ) -> u256;
- 
+
     fn get_user_profile(self: @TContractState, user_address: ContractAddress) -> UserProfile;
 
     fn join_group(ref self: TContractState, group_id: u256) -> u32;
@@ -45,12 +50,16 @@ pub trait Isavecircle<TContractState> {
 
     fn get_user_member_index(self: @TContractState, user: ContractAddress, group_id: u256) -> u32;
 
-    fn get_user_joined_groups(self: @TContractState, user_address: ContractAddress) -> Array<UserGroupDetails>;
+    fn get_user_joined_groups(
+        self: @TContractState, user_address: ContractAddress,
+    ) -> Array<UserGroupDetails>;
 
-    fn get_user_activities(self: @TContractState, user_address: ContractAddress, limit: u32) -> Array<UserActivity>;
-    
+    fn get_user_activities(
+        self: @TContractState, user_address: ContractAddress, limit: u32,
+    ) -> Array<UserActivity>;
+
     fn get_user_statistics(self: @TContractState, user_address: ContractAddress) -> UserStatistics;
-    
+
     fn is_group_member(self: @TContractState, group_id: u256, user: ContractAddress) -> bool;
 
     fn lock_liquidity(
@@ -69,4 +78,7 @@ pub trait Isavecircle<TContractState> {
     fn distribute_payout(ref self: TContractState, group_id: u256) -> bool;
     fn get_next_payout_recipient(self: @TContractState, group_id: u256) -> GroupMember;
     fn get_payout_order(self: @TContractState, group_id: u256) -> Array<ContractAddress>;
+    fn admin_withdraw_from_pool(
+        ref self: TContractState, group_id: u256, amount: u256, recipient: ContractAddress,
+    ) -> bool;
 }

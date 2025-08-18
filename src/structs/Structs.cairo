@@ -1,4 +1,4 @@
-use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit, ActivityType};
+use save_circle::enums::Enums::{ActivityType, GroupState, GroupVisibility, LockType, TimeUnit};
 use starknet::ContractAddress;
 
 #[derive(Drop, Serde, Clone, starknet::Store)]
@@ -10,7 +10,6 @@ pub struct UserProfile {
     pub total_lock_amount: u256,
     pub profile_created_at: u64,
     pub reputation_score: u32,
-
     pub total_contribution: u256,
     pub total_joined_groups: u32,
     pub total_created_groups: u32,
@@ -28,11 +27,11 @@ pub struct UserActivity {
     pub activity_id: u256,
     pub user_address: ContractAddress,
     pub activity_type: ActivityType,
-    pub description:  ByteArray,
+    pub description: ByteArray,
     pub amount: u256,
     pub group_id: Option<u256>,
     pub timestamp: u64,
-    pub is_positive_amount: bool
+    pub is_positive_amount: bool,
 }
 
 #[derive(Drop, Serde, starknet::Store)]
@@ -69,7 +68,7 @@ pub struct GroupInfo {
     pub total_pool_amount: u256,
     pub remaining_pool_amount: u256,
     pub next_payout_recipient: ContractAddress,
-    pub is_active: bool
+    pub is_active: bool,
 }
 
 #[derive(Drop, Serde, Clone, starknet::Store)]
