@@ -12,13 +12,13 @@ pub mod SaveCircle {
     use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
+    use save_circle::base::errors::Errors;
     use save_circle::enums::Enums::{ActivityType, GroupState, GroupVisibility, LockType, TimeUnit};
     use save_circle::events::Events::{
         AdminPoolWithdrawal, ContributionMade, FundsWithdrawn, GroupCreated, PayoutDistributed,
         PayoutSent, UserJoinedGroup, UserRegistered, UsersInvited,
     };
     use save_circle::interfaces::Isavecircle::Isavecircle;
-    use save_circle::base::errors::Errors;
     use save_circle::structs::Structs::{
         GroupInfo, GroupMember, PayoutRecord, ProfileViewData, UserActivity, UserGroupDetails,
         UserProfile, UserStatistics,
@@ -390,10 +390,7 @@ pub mod SaveCircle {
 
             // Validate lock_type if lock is required
             if !requires_lock {
-                assert(
-                    lock_type == LockType::None,
-                    Errors::LOCK_TYPE_SHOULD_BE_NONE,
-                );
+                assert(lock_type == LockType::None, Errors::LOCK_TYPE_SHOULD_BE_NONE);
             }
 
             // Create private group
@@ -668,7 +665,9 @@ pub mod SaveCircle {
             assert(current_time >= cycle_end_time, Errors::GROUP_CYCLE_NOT_ENDED);
 
             // Ensure group is in Completed state (all payouts distributed)
-            assert(group_info.state == GroupState::Completed, Errors::GROUP_CYCLE_MUST_BE_COMPLETED);
+            assert(
+                group_info.state == GroupState::Completed, Errors::GROUP_CYCLE_MUST_BE_COMPLETED,
+            );
 
             // Get user's member information
             let member_index = self.user_joined_groups.read((caller, group_id));
@@ -687,7 +686,9 @@ pub mod SaveCircle {
             } else {
                 // User missed contributions - apply penalty
                 let penalty = self._get_penalty_amount(caller, group_id);
-                assert(group_member.locked_amount >= penalty, Errors::PENALTY_EXCEEDS_LOCKED_AMOUNT);
+                assert(
+                    group_member.locked_amount >= penalty, Errors::PENALTY_EXCEEDS_LOCKED_AMOUNT,
+                );
                 group_member.locked_amount - penalty
             };
 
@@ -843,7 +844,8 @@ pub mod SaveCircle {
 
             let next_recipient = self._get_next_payout_recipient(group_id);
             assert(
-                next_recipient.user != contract_address_const::<0>(), Errors::NO_ELIGIBLE_RECIPIENT_FOUND,
+                next_recipient.user != contract_address_const::<0>(),
+                Errors::NO_ELIGIBLE_RECIPIENT_FOUND,
             );
 
             // Calculate payout amount (total contributions minus insurance fees already deducted)
