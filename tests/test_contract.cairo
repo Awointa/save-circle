@@ -902,7 +902,7 @@ fn test_get_user_profile_view_data() {
 }
 
 #[test]
-#[should_panic(expected: "User already registered")]
+#[should_panic(expected: ('User already registered',))]
 fn test_register_user_already_registered() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -918,7 +918,7 @@ fn test_register_user_already_registered() {
 }
 
 #[test]
-#[should_panic(expected: "Name cannot be empty")]
+#[should_panic(expected: ('Name cannot be empty',))]
 fn test_register_user_empty_name() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -931,7 +931,7 @@ fn test_register_user_empty_name() {
 }
 
 #[test]
-#[should_panic(expected: "Only registered users can create groups")]
+#[should_panic(expected: ('Only registered can create',))]
 fn test_create_group_unregistered_user() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -947,7 +947,7 @@ fn test_create_group_unregistered_user() {
 }
 
 #[test]
-#[should_panic(expected: "Only registered users can join groups")]
+#[should_panic(expected: ('Only registered can join',))]
 fn test_join_group_unregistered_user() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -978,7 +978,7 @@ fn test_join_group_unregistered_user() {
 }
 
 #[test]
-#[should_panic(expected: "Group does not exist")]
+#[should_panic(expected: ('Group does not exist',))]
 fn test_join_nonexistent_group() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -994,7 +994,7 @@ fn test_join_nonexistent_group() {
 }
 
 #[test]
-#[should_panic(expected: "User is already a member")]
+#[should_panic(expected: ('User is already a member',))]
 fn test_join_group_already_member() {
     let (contract_address, _, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };

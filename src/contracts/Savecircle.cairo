@@ -18,9 +18,10 @@ pub mod SaveCircle {
         PayoutSent, UserJoinedGroup, UserRegistered, UsersInvited,
     };
     use save_circle::interfaces::Isavecircle::Isavecircle;
+    use save_circle::base::errors::Errors;
     use save_circle::structs::Structs::{
         GroupInfo, GroupMember, PayoutRecord, ProfileViewData, UserActivity, UserGroupDetails,
-        UserProfile, UserStatistics, joined_group,
+        UserProfile, UserStatistics,
     };
     use starknet::event::EventEmitter;
     use starknet::storage::{
@@ -88,9 +89,7 @@ pub mod SaveCircle {
         group_payout_queue: Map<(u256, u32), ContractAddress>, // (group_id, position) -> user
         group_exists: Map<u256, bool>,
         // Financial tracking from original (keeping all original financial features)
-        joined_groups: Map<(ContractAddress, u64), joined_group>,
         user_payout_index: Map<(u64, ContractAddress), u32>,
-        group_invited_members: Map<(u256, u32), ContractAddress>,
         group_lock: Map<
             (u256, ContractAddress), u256,
         >, // to track group lock amount per user per group
@@ -178,8 +177,8 @@ pub mod SaveCircle {
 
             let user_entry = self.user_profiles.entry(caller);
             let existing_profile = user_entry.read();
-            assert!(!existing_profile.is_registered, "User already registered");
-            assert!(name != "", "Name cannot be empty");
+            assert(!existing_profile.is_registered, Errors::USER_ALREADY_REGISTERED);
+            assert(name != "", Errors::NAME_CANNOT_BE_EMPTY);
 
             // Enhanced profile with additional fields from modified version
             let new_profile = UserProfile {
@@ -296,10 +295,11 @@ pub mod SaveCircle {
             let caller = get_caller_address();
             let group_id = self.next_group_id.read();
             let current_time = get_block_timestamp();
+            let contract_address = contract_address_const::<0x0>();
 
             let user_entry = self.user_profiles.entry(caller);
             let mut existing_profile = user_entry.read();
-            assert!(existing_profile.is_registered, "Only registered users can create groups");
+            assert(existing_profile.is_registered, Errors::ONLY_REGISTERED_CAN_CREATE);
 
             let group_info = GroupInfo {
                 group_id,
@@ -324,7 +324,7 @@ pub mod SaveCircle {
                 requires_reputation_score: min_reputation_score,
                 total_pool_amount: 0,
                 remaining_pool_amount: 0,
-                next_payout_recipient: starknet::contract_address_const::<0>(),
+                next_payout_recipient: contract_address,
                 is_active: true,
             };
 
@@ -386,13 +386,13 @@ pub mod SaveCircle {
 
             let user_entry = self.user_profiles.entry(caller);
             let mut existing_profile = user_entry.read();
-            assert!(existing_profile.is_registered, "Only registered users can create groups");
+            assert(existing_profile.is_registered, Errors::ONLY_REGISTERED_CAN_CREATE);
 
             // Validate lock_type if lock is required
             if !requires_lock {
-                assert!(
+                assert(
                     lock_type == LockType::None,
-                    "Lock type should be None when locking is disabled",
+                    Errors::LOCK_TYPE_SHOULD_BE_NONE,
                 );
             }
 
@@ -429,7 +429,7 @@ pub mod SaveCircle {
             self.group_exists.write(group_id, true);
 
             // Send invitations to all specified members
-            assert!(invited_members.len() <= 1000, "Exceeded max invite limit");
+            assert(invited_members.len() <= 1000, Errors::EXCEEDED_MAX_INVITE_LIMIT);
             let mut i = 0;
             while i < invited_members.len() {
                 let invitee = invited_members[i];
@@ -483,28 +483,28 @@ pub mod SaveCircle {
             // Check if user is registered to platform
             let user_entry = self.user_profiles.entry(caller);
             let mut user_profile = user_entry.read();
-            assert!(user_profile.is_registered, "Only registered users can join groups");
+            assert(user_profile.is_registered, Errors::ONLY_REGISTERED_CAN_JOIN);
 
             // Check if group exists using the dedicated boolean storage (from modified version)
             let group_exists = self.group_exists.read(group_id);
-            assert!(group_exists, "Group does not exist");
+            assert(group_exists, Errors::GROUP_DOES_NOT_EXIST);
 
             let mut group_info = self.groups.read(group_id);
-            assert!(group_info.members < group_info.member_limit, "Group is full");
+            assert(group_info.members < group_info.member_limit, Errors::GROUP_IS_FULL);
 
             // Check if user is already a group member
             let existing_member_index = self.user_joined_groups.read((caller, group_id));
             // Enhanced check from modified version
             let existing_member = self.group_members.read((group_id, existing_member_index));
-            assert!(
+            assert(
                 existing_member.user != caller || !existing_member.is_active,
-                "User is already a member",
+                Errors::USER_ALREADY_MEMBER,
             );
 
             // For private groups
             if group_info.visibility == GroupVisibility::Private {
                 let invitation = self.group_invitations.read((group_id, caller));
-                assert!(invitation, "User is not invited to join group");
+                assert(invitation, Errors::USER_NOT_INVITED);
             }
 
             // Calculate required lock amount based on lock type (from original)
@@ -521,7 +521,7 @@ pub mod SaveCircle {
 
             // Get member index
             let member_index = self.group_next_member_index.read(group_id);
-            assert!(member_index <= group_info.member_limit, "Group is full");
+            assert(member_index <= group_info.member_limit, Errors::GROUP_IS_FULL);
 
             // Enhanced GroupMember struct (combining both versions)
             let group_member = GroupMember {
@@ -594,29 +594,29 @@ pub mod SaveCircle {
             self.pausable.assert_not_paused();
 
             // Validate inputs
-            assert(amount > 0, 'Amount must be greater than 0');
-            assert(group_id != 0, 'Group ID must be greater than 0');
+            assert(amount > 0, Errors::AMOUNT_MUST_BE_GREATER_THAN_ZERO);
+            assert(group_id != 0, Errors::GROUP_ID_MUST_BE_GREATER_THAN_ZERO);
 
             // Check if group exists and is active
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
             assert(
                 group_info.state == GroupState::Active || group_info.state == GroupState::Created,
-                'Group must be Active or Created',
+                Errors::GROUP_MUST_BE_ACTIVE_OR_CREATED,
             );
 
             // Check if user has enough balance
             let token = IERC20Dispatcher { contract_address: token_address };
             let user_token_balance = token.balance_of(caller);
-            assert(user_token_balance >= amount, 'Insufficient token balance');
+            assert(user_token_balance >= amount, Errors::INSUFFICIENT_TOKEN_BALANCE);
 
             // CHECK ALLOWANCE FIRST
             let allowance = token.allowance(caller, get_contract_address());
-            assert(allowance >= amount, 'Insufficient allowance');
+            assert(allowance >= amount, Errors::INSUFFICIENT_ALLOWANCE);
 
             // Transfer tokens from user to this contract
             let success = token.transfer_from(caller, get_contract_address(), amount);
-            assert(success, 'Token transfer failed');
+            assert(success, Errors::TOKEN_TRANSFER_FAILED);
 
             // Update the group lock storage using correct tuple access
             let current_group_lock = self.group_lock.read((group_id, caller));
@@ -647,11 +647,11 @@ pub mod SaveCircle {
             self.pausable.assert_not_paused();
 
             // Verify user is a member of this group
-            assert(self._is_member(group_id, caller), 'User not member of this group');
+            assert(self._is_member(group_id, caller), Errors::USER_NOT_MEMBER);
 
             // Get group information
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
 
             // Calculate cycle end time
             let cycle_duration_seconds = match group_info.cycle_unit {
@@ -665,20 +665,20 @@ pub mod SaveCircle {
             let cycle_end_time = group_info.start_time + cycle_duration_seconds;
 
             // Ensure cycle has ended
-            assert(current_time >= cycle_end_time, 'Group cycle has not ended yet');
+            assert(current_time >= cycle_end_time, Errors::GROUP_CYCLE_NOT_ENDED);
 
             // Ensure group is in Completed state (all payouts distributed)
-            assert(group_info.state == GroupState::Completed, 'Group cycle must be completed');
+            assert(group_info.state == GroupState::Completed, Errors::GROUP_CYCLE_MUST_BE_COMPLETED);
 
             // Get user's member information
             let member_index = self.user_joined_groups.read((caller, group_id));
             let mut group_member = self.group_members.read((group_id, member_index));
 
             // Check if user has locked funds to withdraw
-            assert(group_member.locked_amount > 0, 'No locked funds to withdraw');
+            assert(group_member.locked_amount > 0, Errors::NO_LOCKED_FUNDS_TO_WITHDRAW);
 
             // Check if user has already withdrawn (prevent double withdrawal)
-            assert(!group_member.has_been_paid, 'Funds already been withdrawn');
+            assert(!group_member.has_been_paid, Errors::FUNDS_ALREADY_WITHDRAWN);
 
             // Calculate withdrawable amount (could include penalties for missed contributions)
             let withdrawable_amount = if self._has_completed_circle(caller, group_id) {
@@ -687,7 +687,7 @@ pub mod SaveCircle {
             } else {
                 // User missed contributions - apply penalty
                 let penalty = self._get_penalty_amount(caller, group_id);
-                assert(group_member.locked_amount >= penalty, 'Penalty exceeds locked amount');
+                assert(group_member.locked_amount >= penalty, Errors::PENALTY_EXCEEDS_LOCKED_AMOUNT);
                 group_member.locked_amount - penalty
             };
 
@@ -696,7 +696,7 @@ pub mod SaveCircle {
                 contract_address: self.payment_token_address.read(),
             };
             let success = payment_token.transfer(caller, withdrawable_amount);
-            assert(success, 'Token transfer failed');
+            assert(success, Errors::TOKEN_TRANSFER_FAILED);
 
             // Update user's locked balance
             let current_locked = self.locked_balance.read(caller);
@@ -728,12 +728,12 @@ pub mod SaveCircle {
             self.pausable.assert_not_paused();
 
             // Verify user is a member of this group
-            assert(self._is_member(group_id, caller), 'User not member of this group');
+            assert(self._is_member(group_id, caller), Errors::USER_NOT_MEMBER);
 
             // Get group information
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
-            assert(group_info.state == GroupState::Active, 'Group must be active');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
+            assert(group_info.state == GroupState::Active, Errors::GROUP_MUST_BE_ACTIVE);
 
             // Get user's member information
             let member_index = self.user_joined_groups.read((caller, group_id));
@@ -751,16 +751,16 @@ pub mod SaveCircle {
                 contract_address: self.payment_token_address.read(),
             };
             let user_balance = payment_token.balance_of(caller);
-            assert(user_balance >= total_payment, 'Insufficient bal for contri');
+            assert(user_balance >= total_payment, Errors::INSUFFICIENT_BAL_FOR_CONTRI);
 
             // CHECK ALLOWANCE FIRST
             let allowance = payment_token.allowance(caller, get_contract_address());
-            assert(allowance >= total_payment, 'Insufficient allowance');
+            assert(allowance >= total_payment, Errors::INSUFFICIENT_ALLOWANCE);
 
             // Transfer total payment from user to contract
             let success = payment_token
                 .transfer_from(caller, get_contract_address(), total_payment);
-            assert(success, 'Contribution transfer failed');
+            assert(success, Errors::CONTRIBUTION_TRANSFER_FAILED);
 
             // Add insurance fee to group's insurance pool
             let current_pool = self.insurance_pool.read(group_id);
@@ -810,11 +810,11 @@ pub mod SaveCircle {
             self.pausable.assert_not_paused();
 
             let mut group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
 
-            assert(group_info.creator == caller, 'Only creator can activate group');
+            assert(group_info.creator == caller, Errors::ONLY_CREATOR_CAN_ACTIVATE);
 
-            assert(group_info.state == GroupState::Created, 'Group must be in Created state');
+            assert(group_info.state == GroupState::Created, Errors::GROUP_MUST_BE_CREATED_STATE);
 
             group_info.state = GroupState::Active;
             self.groups.write(group_id, group_info);
@@ -828,22 +828,22 @@ pub mod SaveCircle {
             self.pausable.assert_not_paused();
 
             let mut group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
-            assert(group_info.state == GroupState::Active, 'Group must be active');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
+            assert(group_info.state == GroupState::Active, Errors::GROUP_MUST_BE_ACTIVE);
 
             // Only group creator or admin can distribute payouts
             assert(
                 group_info.creator == caller
                     || self.accesscontrol.has_role(DEFAULT_ADMIN_ROLE, caller),
-                'Only creator can distribute',
+                Errors::ONLY_CREATOR_CAN_DISTRIBUTE,
             );
 
             let total_contributions = self._calculate_total_contributions(group_id);
-            assert(total_contributions > 0, 'No contributions to distribute');
+            assert(total_contributions > 0, Errors::NO_CONTRIBUTIONS_TO_DISTRIBUTE);
 
             let next_recipient = self._get_next_payout_recipient(group_id);
             assert(
-                next_recipient.user != contract_address_const::<0>(), 'No eligible recipient found',
+                next_recipient.user != contract_address_const::<0>(), Errors::NO_ELIGIBLE_RECIPIENT_FOUND,
             );
 
             // Calculate payout amount (total contributions minus insurance fees already deducted)
@@ -853,7 +853,7 @@ pub mod SaveCircle {
                 contract_address: self.payment_token_address.read(),
             };
             let success = payment_token.transfer(next_recipient.user, payout_amount);
-            assert(success, 'Payout transfer failed');
+            assert(success, Errors::PAYOUT_TRANSFER_FAILED);
 
             // Update recipient's payout status
             let mut updated_member = next_recipient.clone();
@@ -993,9 +993,9 @@ pub mod SaveCircle {
             self.insurance_pool.read(group_id)
         }
 
-        fn get_protocol_treasury(self: @ContractState) -> u256 {
-            self.protocol_treasury.read()
-        }
+        // fn get_protocol_treasury(self: @ContractState) -> u256 {
+        //     self.protocol_treasury.read()
+        // }
 
         fn get_next_payout_recipient(self: @ContractState, group_id: u256) -> GroupMember {
             self._get_next_payout_recipient(group_id)
@@ -1004,7 +1004,7 @@ pub mod SaveCircle {
 
         fn get_payout_order(self: @ContractState, group_id: u256) -> Array<ContractAddress> {
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
 
             let mut payout_order = array![];
 
@@ -1038,15 +1038,12 @@ pub mod SaveCircle {
                         if !found {
                             best_member = member.clone();
                             found = true;
-                        } else {
+                        } else if member.locked_amount > best_member.locked_amount {
                             // Compare priority: higher locked amount wins, then earlier join time
-                            if member.locked_amount > best_member.locked_amount {
-                                best_member = member.clone();
-                            } else if member.locked_amount == best_member.locked_amount {
-                                if member.joined_at < best_member.joined_at {
-                                    best_member = member;
-                                }
-                            }
+                            best_member = member.clone();
+                        } else if member.locked_amount == best_member.locked_amount
+                            && member.joined_at < best_member.joined_at {
+                            best_member = member;
                         }
                     }
                     i += 1;
@@ -1071,13 +1068,13 @@ pub mod SaveCircle {
 
             self.pausable.assert_not_paused();
 
-            assert(amount > 0, 'Amount must be greater than 0');
+            assert(amount > 0, Errors::AMOUNT_MUST_BE_GREATER_THAN_ZERO);
 
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
 
             let current_pool_balance = self.insurance_pool.read(group_id);
-            assert(current_pool_balance >= amount, 'Insufficient pool balance');
+            assert(current_pool_balance >= amount, Errors::INSUFFICIENT_POOL_BALANCE);
 
             self.insurance_pool.write(group_id, current_pool_balance - amount);
 
@@ -1085,7 +1082,7 @@ pub mod SaveCircle {
                 contract_address: self.payment_token_address.read(),
             };
             let success = payment_token.transfer(recipient, amount);
-            assert(success, 'Token transfer failed');
+            assert(success, Errors::TOKEN_TRANSFER_FAILED);
 
             self
                 .emit(
@@ -1177,37 +1174,31 @@ pub mod SaveCircle {
                     if !found_eligible {
                         best_member = member;
                         found_eligible = true;
-                    } else {
+                    } else if member.locked_amount > best_member.locked_amount {
                         // Compare priority: higher locked amount wins, then earlier join time
-                        if member.locked_amount > best_member.locked_amount {
-                            best_member = member.clone();
-                        } else if member.locked_amount == best_member.locked_amount {
-                            if member.joined_at < best_member.joined_at {
-                                best_member = member;
-                            }
-                        }
+                        best_member = member.clone();
+                    } else if member.locked_amount == best_member.locked_amount
+                        && member.joined_at < best_member.joined_at {
+                        // If locked amounts are equal, earlier join time wins
+                        best_member = member;
                     }
                 }
                 i += 1;
             }
 
-            assert(found_eligible, 'No eligible member found');
+            assert(found_eligible, Errors::NO_ELIGIBLE_MEMBER_FOUND);
             best_member
         }
 
         fn _calculate_total_contributions(self: @ContractState, group_id: u256) -> u256 {
             let group_info = self.groups.read(group_id);
-            assert(group_info.group_id != 0, 'Group does not exist');
+            assert(group_info.group_id != 0, Errors::GROUP_DOES_NOT_EXIST);
 
             let mut total_contributions = 0_u256;
             let mut member_index = 0_u32;
 
             // Iterate through all members in the group
-            loop {
-                if member_index >= group_info.members {
-                    break;
-                }
-
+            while member_index < group_info.members {
                 let group_member = self.group_members.read((group_id, member_index));
 
                 // Calculate this member's total contributions

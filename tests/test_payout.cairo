@@ -241,7 +241,7 @@ fn test_distribute_payout_inactive_group() {
 }
 
 #[test]
-#[should_panic(expected: 'Only creator can distribute')]
+#[should_panic(expected: ('Only creator can distribute',))]
 fn test_distribute_payout_unauthorized_caller() {
     let (contract_address, owner, token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
@@ -264,7 +264,7 @@ fn test_distribute_payout_unauthorized_caller() {
 }
 
 #[test]
-#[should_panic(expected: 'No contributions to distribute')]
+#[should_panic(expected: ('No contributions to distrib',))]
 fn test_distribute_payout_no_contributions() {
     let (contract_address, _owner, _token_address) = setup();
     let dispatcher = IsavecircleDispatcher { contract_address };
