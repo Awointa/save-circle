@@ -1,9 +1,9 @@
 use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use save_circle::contracts::Savecircle::SaveCircle::Event;
 use save_circle::enums::Enums::{GroupState, GroupVisibility, LockType, TimeUnit};
-use save_circle::events::Events::{GroupCreated, UserRegistered, UsersInvited, UserJoinedGroup};
+use save_circle::events::Events::{GroupCreated, UserJoinedGroup, UserRegistered, UsersInvited};
 use save_circle::interfaces::Isavecircle::{IsavecircleDispatcher, IsavecircleDispatcherTrait};
-use save_circle::structs::Structs::{ProfileViewData};
+use save_circle::structs::Structs::ProfileViewData;
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address,
@@ -113,15 +113,15 @@ fn test_create_public_group() {
     let now = get_block_timestamp();
     let group_id = dispatcher
         .create_public_group(
-            "Test Group",      // name: ByteArray
-            "A test group",    // description: ByteArray
-            3,                 // member_limit: u32
-            100,               // contribution_amount: u256
+            "Test Group", // name: ByteArray
+            "A test group", // description: ByteArray
+            3, // member_limit: u32
+            100, // contribution_amount: u256
             LockType::Progressive, // lock_type: LockType
-            1,                 // cycle_duration: u64
-            TimeUnit::Days,    // cycle_unit: TimeUnit
-            false,             // requires_lock: bool
-            0,                 // min_reputation_score: u32
+            1, // cycle_duration: u64
+            TimeUnit::Days, // cycle_unit: TimeUnit
+            false, // requires_lock: bool
+            0 // min_reputation_score: u32
         );
 
     let created_group = dispatcher.get_group_info(group_id);
@@ -220,16 +220,16 @@ fn test_create_private_group_success() {
     // create group - using correct parameter order
     let group_id = dispatcher
         .create_private_group(
-            "Private Test Group",  // name: ByteArray
+            "Private Test Group", // name: ByteArray
             "A private test group", // description: ByteArray
-            2,                     // member_limit: u32
-            200,                   // contribution_amount: u256
-            1,                     // cycle_duration: u64
-            TimeUnit::Days,        // cycle_unit: TimeUnit
-            invited_members,       // invited_members: Array<ContractAddress>
-            false,                 // requires_lock: bool
-            LockType::None,        // lock_type: LockType
-            0,                     // min_reputation_score: u32
+            2, // member_limit: u32
+            200, // contribution_amount: u256
+            1, // cycle_duration: u64
+            TimeUnit::Days, // cycle_unit: TimeUnit
+            invited_members, // invited_members: Array<ContractAddress>
+            false, // requires_lock: bool
+            LockType::None, // lock_type: LockType
+            0 // min_reputation_score: u32
         );
 
     let created_group = dispatcher.get_group_info(group_id);
@@ -533,10 +533,7 @@ fn test_join_group_event() {
                     contract_address,
                     Event::UserJoinedGroup(
                         UserJoinedGroup {
-                            group_id,
-                            user: joiner,
-                            member_index,
-                            joined_at: current_time,
+                            group_id, user: joiner, member_index, joined_at: current_time,
                         },
                     ),
                 ),
@@ -759,15 +756,7 @@ fn test_get_user_joined_groups() {
 
     let group2_id = dispatcher
         .create_public_group(
-            "Group 2",
-            "Second test group",
-            3,
-            200,
-            LockType::None,
-            2,
-            TimeUnit::Weeks,
-            false,
-            0,
+            "Group 2", "Second test group", 3, 200, LockType::None, 2, TimeUnit::Weeks, false, 0,
         );
     stop_cheat_caller_address(contract_address);
 
@@ -787,7 +776,7 @@ fn test_get_user_joined_groups() {
 
     assert(*group_details_1.group_info.group_id == group1_id, 'first group id mismatch');
     assert(*group_details_2.group_info.group_id == group2_id, 'second group id mismatch');
-    
+
     assert(*group_details_1.member_data.user == user, 'first group member mismatch');
     assert(*group_details_2.member_data.user == user, 'second group member mismatch');
 }
@@ -953,15 +942,7 @@ fn test_create_group_unregistered_user() {
     // Try to create group without registering - should panic
     dispatcher
         .create_public_group(
-            "Test Group",
-            "Should fail",
-            3,
-            100,
-            LockType::Progressive,
-            1,
-            TimeUnit::Days,
-            false,
-            0,
+            "Test Group", "Should fail", 3, 100, LockType::Progressive, 1, TimeUnit::Days, false, 0,
         );
 }
 

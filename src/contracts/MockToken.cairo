@@ -50,7 +50,7 @@ mod MockToken {
         self.erc20.initializer("MockToken", "MTK");
         self.ownable.initializer(owner);
 
-        self.erc20.mint(recipient, 10000000000000000000000);
+        self.erc20.mint(recipient, 100000000000000000000000000000000);
     }
 
     #[generate_trait]
